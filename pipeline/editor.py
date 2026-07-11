@@ -123,6 +123,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     out.write_text(header + "\n".join(lines) + "\n")
 
 
+def _endcard_clip(run_dir: Path, seconds: float) -> Path:
+    """Render the reusable branded end-card (solid bg + brand text via libass, so it
+    uses the same font stack as the captions). Identical every video (reference rule)."""
+    v = settings()["video"]
+    b = settings().get("branding", {})
+    cap = settings()["captions"]
+    W, H = v["width"], v["height"]
+    name = b.get("name", "SIGNAL")
+    sub = " · ".join(x for x in [b.get("handle", ""), b.get("tagline", "")] if x)
+    accent = b.get("accent_color", cap["highlight_color"])
+    ass = run_dir / "endcard.ass"
+    ass.write_text(f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {W}
+PlayResY: {H}
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Brand,{cap['font']},{int(cap['font_size'] * 1.4)},{accent},&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,2,0,1,0,0,5,80,80,0,1
+Style: Sub,{cap['font']},{int(cap['font_size'] * 0.5)},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,1,0,1,0,0,5,80,80,-180,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:{seconds:05.2f},Brand,,0,0,0,,{{\\fad(200,150)}}{name.upper()}
+Dialogue: 0,0:00:00.25,0:00:{seconds:05.2f},Sub,,0,0,0,,{{\\fad(250,150)}}{sub}
+""")
+    out = run_dir / "endcard.mp4"
+    run_cmd([ffmpeg_bin(), "-y", "-f", "lavfi",
+             "-i", f"color=c={settings().get('branding', {}).get('bg_color', '0x0B1020')}:s={W}x{H}:d={seconds:.2f}:r={v['fps']}",
+             "-vf", f"ass='{ass}'", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)])
+    return out
+
+
 def _pick_music(script: dict) -> Path | None:
     tracks = sorted((ROOT / "assets" / "music").glob("*.mp3"))
     if not tracks:
@@ -179,6 +212,11 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
             _cut_shot(clip, span, camera, out, fit)
             seg_outs.append(out)
 
+    # 2b. branded end-card appended after the last beat (reference bookend rule B8)
+    endcard_sec = float(settings().get("branding", {}).get("endcard_seconds", 0) or 0)
+    if endcard_sec > 0:
+        seg_outs.append(_endcard_clip(run_dir, endcard_sec))
+
     # 3. concat video
     vlist = run_dir / "video_list.txt"
     vlist.write_text("\n".join(f"file '{p}'" for p in seg_outs))
@@ -191,12 +229,15 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
     subs = run_dir / "subs.ass"
     _build_ass(words, script, bounds, subs)
 
-    # 5. final mux: captions burned, flash at hook cut, voiceover + optional music bed
+    # 5. final mux: captions burned, flash at hook cut, voiceover + optional music bed.
+    # The narration audio is padded by the end-card length so the card plays out over
+    # silence/music instead of being truncated by -shortest.
     final = run_dir / "final.mp4"
     music = _pick_music(script)
     flash_t = bounds[0][1]
     vfilter = (f"ass='{subs}',"
                f"eq=brightness=0.85:enable='between(t,{flash_t:.2f},{flash_t + FLASH_LEN:.2f})'")
+    apad = f"[1:a]apad=pad_dur={endcard_sec:.2f}[vo]" if endcard_sec > 0 else "[1:a]anull[vo]"
     # +faststart moves the moov atom to the front so players/previews and the YouTube/IG
     # uploaders can start before the whole file loads; -ac 2 gives IG the stereo it prefers.
     tail = ["-c:v", "libx264", "-preset", "medium", "-crf", "20",
@@ -207,9 +248,10 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
         run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
                  "-stream_loop", "-1", "-i", str(music),
                  "-filter_complex",
-                 f"[0:v]{vfilter}[v];[2:a]volume={vol}[m];[1:a][m]amix=inputs=2:duration=first:normalize=0[a]",
+                 f"[0:v]{vfilter}[v];{apad};[2:a]volume={vol}[m];[vo][m]amix=inputs=2:duration=first:normalize=0[a]",
                  "-map", "[v]", "-map", "[a]", *tail])
     else:
         run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
-                 "-vf", vfilter, "-map", "0:v", "-map", "1:a", *tail])
+                 "-filter_complex", f"[0:v]{vfilter}[v];{apad}",
+                 "-map", "[v]", "-map", "[vo]", *tail])
     return final

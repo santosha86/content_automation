@@ -32,6 +32,15 @@ whisper:
 music:
   volume: 0.12
 
+# Branded end-card (reference rule: one reusable end-card, identical every video, last ~2s)
+branding:
+  name: "SIGNAL"
+  handle: "@signal.ai"
+  tagline: "AI news, decoded daily"
+  bg_color: "0x0B1020"          # ffmpeg color for the card background
+  accent_color: "&H0000D9FF"    # ASS BGR for the brand name (matches caption accent)
+  endcard_seconds: 2.0
+
 # Scout
 scout:
   max_candidates: 25        # articles considered per run

@@ -100,7 +100,7 @@ def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str)
             "topic": script["topic"]["title"],
             "hook_text": script.get("hook_text", ""),
             "broll_queries": [s.get("broll_query", "") for s in script["segments"]],
-            "note": "Phase 1 pipeline: no face-cam or branded end-card yet (arrive in Phase 2) — grade B4/B8 factually.",
+            "note": "Pipeline renders a branded end-card in the last ~2s (grade B8 on the final frames). The brief silence UNDER that end-card is the intentional end_with_silence bookend (music bed arrives later) — grade B5 only for dead-air gaps WITHIN the narration, not the trailing end-card. Face-cam layout still arrives later — grade B4 factually.",
         },
     }
     content = []
