@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ShortFormVideoChecklist",
+  "version": "1.0",
+  "description": "Gradeable checklist for a short-form video pipeline. Each item is a yes/no question a Reviewer Agent can score.",
+  "gates": {
+    "gate_a_pre_production": [
+      {
+        "id": "A1",
+        "question": "Is a specific topic/angle chosen (not vague)?",
+        "pass_criteria": "One clear topic and a distinct angle are stated.",
+        "owner": "human",
+        "auto_checkable": false
+      },
+      {
+        "id": "A2",
+        "question": "Is the hook written as 4-6 words that can build word-by-word?",
+        "pass_criteria": "Hook headline is <=6 words and splits into 2-3 pop-in chunks.",
+        "owner": "agent_monitored",
+        "auto_checkable": true
+      },
+      {
+        "id": "A3",
+        "question": "Is the script approved?",
+        "pass_criteria": "Final script text exists and is marked approved by the human.",
+        "owner": "human",
+        "auto_checkable": false
+      },
+      {
+        "id": "A4",
+        "question": "Is a shot list + required REAL B-roll identified?",
+        "pass_criteria": "Each script line maps to a shot; real product/demo B-roll to capture is listed.",
+        "owner": "agent_monitored",
+        "auto_checkable": true
+      }
+    ],
+    "gate_b_pre_publish": [
+      {
+        "id": "B1",
+        "question": "Does the first frame stop the scroll on its own without text?",
+        "pass_criteria": "Frame 0 is a strong/high-contrast image; no headline text required to be compelling.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "keyframe_0"
+      },
+      {
+        "id": "B2",
+        "question": "Is the hook headline fully readable within the first 2 seconds?",
+        "pass_criteria": "Hook text present and legible (size/contrast) by t<=2.0s.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "keyframes_0_2s"
+      },
+      {
+        "id": "B3",
+        "question": "Are captions chunked to 2-4 words and synced to speech?",
+        "pass_criteria": "No caption cue exceeds 4 words; cue timings align to voiceover.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "caption_file"
+      },
+      {
+        "id": "B4",
+        "question": "Does composition follow face-bottom / B-roll-top and stay <=3 layers?",
+        "pass_criteria": "Face-cam at bottom, B-roll top ~60-80%, max 3 simultaneous visual layers.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "keyframes_sampled"
+      },
+      {
+        "id": "B5",
+        "question": "Are silences trimmed from the voiceover?",
+        "pass_criteria": "No dead-air gaps > ~0.4s in the ElevenLabs/voice track.",
+        "owner": "agent_monitored",
+        "auto_checkable": true,
+        "input": "audio_or_waveform"
+      },
+      {
+        "id": "B6",
+        "question": "Is the B-roll real proof footage (not generic filler)?",
+        "pass_criteria": "B-roll shows the actual tool/product being discussed.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "keyframes_broll"
+      },
+      {
+        "id": "B7",
+        "question": "Does the CTA use the same kinetic-text style as the hook?",
+        "pass_criteria": "Outro CTA font/animation matches the hook treatment (bookend).",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "keyframes_outro"
+      },
+      {
+        "id": "B8",
+        "question": "Is the branded end-card present?",
+        "pass_criteria": "Reusable end-card appears in the final ~2s.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "keyframe_last"
+      },
+      {
+        "id": "B9",
+        "question": "Are export settings correct (9:16, resolution, filename)?",
+        "pass_criteria": "Aspect ratio 9:16, target resolution met, filename matches convention.",
+        "owner": "agent_automatable",
+        "auto_checkable": true,
+        "input": "export_metadata"
+      }
+    ]
+  },
+  "scoring": {
+    "pass_condition": "all gate items with owner in [agent_automatable, agent_monitored] return pass AND human items are approved",
+    "output_mode": "gap_only",
+    "return_shape": {
+      "overall": "pass|fail",
+      "items": [{ "id": "string", "result": "pass|fail", "gap_note": "string (only if fail)" }]
+    }
+  }
+}

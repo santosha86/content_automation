@@ -18,7 +18,7 @@ FOLLOW THIS STYLE GUIDE EXACTLY:
 
 Reply with JSON only:
 {{
-  "hook_text": "<on-screen hook, max 7 words>",
+  "hook_text": "<on-screen hook headline, 4-6 words, reads well when built one word at a time>",
   "segments": [
     {{
       "voiceover": "<1-2 spoken sentences, written to be SAID with the segment's emotion>",
@@ -33,7 +33,9 @@ Reply with JSON only:
 }}
 
 Use 4 to {cfg['max_segments']} segments. Total spoken length must fit ~{cfg['target_seconds']} seconds
-(~{int(cfg['target_seconds'] * 2.5)} words total). The first segment IS the hook.""",
+(~{int(cfg['target_seconds'] * 2.5)} words total). The first segment IS the hook.
+The LAST segment's overlay must be the CTA as 3-5 punchy words (e.g. "COMMENT AI FOR GUIDE") —
+it is rendered in the same kinetic style as the hook (bookend rule).""",
         system="You are an expert short-form video scriptwriter. Output valid JSON only.",
     )
     script["topic"] = topic

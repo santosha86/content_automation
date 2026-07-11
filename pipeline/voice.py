@@ -51,6 +51,15 @@ def _elevenlabs(text: str, emotion: str, out_mp3: Path) -> None:
     out_mp3.write_bytes(resp.content)
 
 
+def _trim_silence(mp3: Path) -> None:
+    """Cut dead air from both ends of a segment (SOP: trim blank spaces from the voiceover)."""
+    edge = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08"
+    tmp = mp3.with_suffix(".trim.mp3")
+    run_cmd([ffmpeg_bin(), "-y", "-i", str(mp3),
+             "-af", f"{edge},areverse,{edge},areverse", str(tmp)])
+    tmp.replace(mp3)
+
+
 def _macos_say(text: str, out_mp3: Path) -> None:
     aiff = out_mp3.with_suffix(".aiff")
     subprocess.run(["say", "-o", str(aiff), text], check=True)
@@ -70,5 +79,6 @@ def synthesize(script: dict, run_dir: Path) -> list[Path]:
             _elevenlabs(seg["voiceover"], seg.get("emotion", ""), out)
         else:
             _macos_say(seg["voiceover"], out)
+        _trim_silence(out)
         paths.append(out)
     return paths

@@ -11,6 +11,8 @@ place where "our taste" lives.
 - Short sentences. Spoken rhythm. Contractions.
 
 ## Hook rules (first 2 seconds decide everything)
+- On-screen hook headline: 4-6 words that build word-by-word (kinetic text). First frame
+  carries NO text — the visual alone must stop the scroll.
 - Open with the most surprising concrete fact, number, or consequence — never context.
 - Good patterns: "X just did Y.", "This costs $N and replaces Z.", "Nobody noticed X shipped Y."
 - Never open with "In the world of AI..." or the company's name alone.

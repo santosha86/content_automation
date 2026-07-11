@@ -10,7 +10,7 @@ import datetime
 import json
 import re
 
-from . import editor, packager, scout, visuals, voice, writer
+from . import editor, packager, reviewer, scout, visuals, voice, writer
 from .util import ROOT, media_duration
 
 
@@ -24,7 +24,7 @@ def main():
     ap.add_argument("--article-url", default="", help="source url for a manual topic")
     args = ap.parse_args()
 
-    print("[1/6] scout: picking topic...")
+    print("[1/7] scout: picking topic...")
     if args.topic:
         topic = {"title": args.topic, "summary": args.topic, "url": args.article_url,
                  "source": "manual", "why": "manual override"}
@@ -37,24 +37,27 @@ def main():
     run_dir = ROOT / "output" / "runs" / slug
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    print("[2/6] writer: generating script...")
+    print("[2/7] writer: generating script...")
     script = writer.write_script(topic)
     (run_dir / "script.json").write_text(json.dumps(script, indent=2))
     print(f"      -> {len(script['segments'])} segments, hook: \"{script['hook_text']}\"")
 
-    print("[3/6] voice: synthesizing narration...")
+    print("[3/7] voice: synthesizing narration...")
     seg_audio = voice.synthesize(script, run_dir)
     durations = [media_duration(p) for p in seg_audio]
     print(f"      -> {sum(durations):.1f}s total narration")
 
-    print("[4/6] visuals: gathering b-roll...")
+    print("[4/7] visuals: gathering b-roll...")
     seg_video = visuals.gather(script, durations, run_dir)
 
-    print("[5/6] editor: assembling video...")
+    print("[5/7] editor: assembling video...")
     final = editor.assemble(script, seg_audio, seg_video, run_dir)
 
-    print("[6/6] packager: delivering to review gate...")
+    print("[6/7] packager: delivering to review gate...")
     review = packager.deliver(script, final, slug)
+
+    print("[7/7] reviewer: grading against Gate B checklist...")
+    reviewer.grade(review / f"{slug}.mp4", run_dir, review, script, slug)
 
     print(f"\nDONE  ->  {review}/")
     print(f"  video:    {review / (slug + '.mp4')}")
