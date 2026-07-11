@@ -7,6 +7,7 @@ Two lanes, one scoring rubric (the viral-shorts-strategy skill):
 Output is the Strategist's top-3, ranked. The `story_pick` checkpoint (auto|manual)
 decides whether rank-1 is taken automatically or the user chooses in the dashboard.
 """
+import os
 import re
 
 import requests
@@ -15,6 +16,7 @@ from . import scout
 from .util import llm_json, settings, strategy_skill
 
 TRENDING_URL = "https://github.com/trending?since=daily"
+TAVILY_URL = "https://api.tavily.com/search"
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; content-automation/1.0)"}
 
 
@@ -57,15 +59,54 @@ def fetch_github_trending(limit: int = 15) -> list[dict]:
     return out
 
 
+def fetch_tavily(limit: int = 10) -> list[dict]:
+    """Fresh AI-news headlines via Tavily search — augments the RSS ai_news lane with
+    stories the fixed feed list misses. Best-effort: [] when no key or on any failure."""
+    key = os.getenv("TAVILY_API_KEY", "")
+    if not key:
+        return []
+    cfg = settings()["scout"]
+    days = max(1, int(cfg.get("max_age_hours", 48) / 24) or 1)
+    try:
+        resp = requests.post(TAVILY_URL, timeout=30, json={
+            "api_key": key,
+            "query": "biggest AI news today: OpenAI Anthropic Google Meta models tools launches",
+            "topic": "news", "days": days, "max_results": limit, "search_depth": "basic",
+        })
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+    except Exception:
+        return []
+    out = []
+    for r in results:
+        url = r.get("url", "")
+        if not url:
+            continue
+        out.append({
+            "lane": "ai_news",
+            "source": "Tavily",
+            "title": r.get("title", "").strip(),
+            "summary": (r.get("content", "") or "")[:500],
+            "url": url,
+            "key": scout._key({"link": url}),
+        })
+    return out
+
+
 def gather_candidates() -> list[dict]:
-    """Both lanes, deduped against seen history, tagged with their lane."""
+    """All lanes, deduped against seen history and each other, tagged with their lane."""
+    seen = scout._seen()
+    by_key: dict[str, dict] = {}
     news = []
     for c in scout.fetch_candidates():
         c["lane"] = "ai_news"
         news.append(c)
-    seen = scout._seen()
-    gh = [c for c in fetch_github_trending() if c["key"] not in seen]
-    return news + gh
+    # RSS first (richest summaries), then Tavily fills gaps, then GitHub trending.
+    for c in news + fetch_tavily() + fetch_github_trending():
+        if c["key"] in seen or c["key"] in by_key or not c.get("title"):
+            continue
+        by_key[c["key"]] = c
+    return list(by_key.values())
 
 
 def top_stories(n: int = 3) -> list[dict]:
