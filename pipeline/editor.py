@@ -156,6 +156,33 @@ Dialogue: 0,0:00:00.25,0:00:{seconds:05.2f},Sub,,0,0,0,,{{\\fad(250,150)}}{sub}
     return out
 
 
+WHOOSH_LEN = 0.45  # a touch longer than the visual flash so the swish carries the cut
+
+
+def _whoosh_clip(run_dir: Path) -> Path | None:
+    """A short transition 'whoosh' — the swish that sells the hook->body flash cut
+    (reference RULE_TRANSITIONS: mask the hard cut with a color flash + whoosh SFX).
+    Filtered noise with a fast swell-and-fall, so it reads as a swipe, not a hiss.
+    Returns None (skip the SFX) if generation fails — never block the render."""
+    out = run_dir / "whoosh.wav"
+    dur = WHOOSH_LEN
+    # Pink noise band-limited to a 'swipe' range, shaped by a sharp fade in + longer fade
+    # out. lowpass sweep isn't scriptable in one pass, so the amplitude envelope does the
+    # work: quiet -> quick swell -> tail off.
+    chain = (f"highpass=f=250,lowpass=f=4500,"
+             f"afade=t=in:st=0:d=0.12:curve=exp,"
+             f"afade=t=out:st=0.14:d={dur - 0.14:.2f}:curve=exp,"
+             f"volume=1.5")
+    try:
+        run_cmd([ffmpeg_bin(), "-y", "-f", "lavfi",
+                 "-i", f"anoisesrc=color=pink:duration={dur:.2f}:amplitude=0.7",
+                 "-af", chain, "-ar", "44100", str(out)])
+    except Exception as e:
+        print(f"  [editor] whoosh gen failed ({e}) — skipping SFX")
+        return None
+    return out if out.exists() else None
+
+
 def _pick_music(script: dict, seconds: float, run_dir: Path) -> tuple[Path, float] | None:
     """Music bed for the storyboard's mood (real track from assets/music/<mood>/ if
     present, else a synthesized bed). Returns (path, mix_gain) or None for mood 'none'."""
@@ -240,20 +267,39 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
     vfilter = (f"ass='{subs}',"
                f"eq=brightness=0.85:enable='between(t,{flash_t:.2f},{flash_t + FLASH_LEN:.2f})'")
     apad = f"[1:a]apad=pad_dur={endcard_sec:.2f}[vo]" if endcard_sec > 0 else "[1:a]anull[vo]"
+    # Whoosh SFX under the hook->body flash: start it just before the flash so the swish
+    # peaks on the cut. Only when there IS a hook cut (>1 segment).
+    whoosh = _whoosh_clip(run_dir) if len(bounds) > 1 else None
+    whoosh_delay_ms = max(int((flash_t - 0.10) * 1000), 0)
     # +faststart moves the moov atom to the front so players/previews and the YouTube/IG
     # uploaders can start before the whole file loads; -ac 2 gives IG the stereo it prefers.
     tail = ["-c:v", "libx264", "-preset", "medium", "-crf", "20",
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-movflags", "+faststart",
             "-shortest", str(final)]
+    # Build the audio graph incrementally: voiceover [+ music bed] [+ whoosh] -> [a].
+    inputs = ["-i", str(concat), "-i", str(voiceover)]
+    audio_parts = [f"[0:v]{vfilter}[v]", apad]  # [v] and [vo]
+    mix_labels = ["[vo]"]
+    idx = 2
     if music:
         track, gain = music
-        run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
-                 "-stream_loop", "-1", "-i", str(track),
-                 "-filter_complex",
-                 f"[0:v]{vfilter}[v];{apad};[2:a]volume={gain}[m];[vo][m]amix=inputs=2:duration=first:normalize=0[a]",
-                 "-map", "[v]", "-map", "[a]", *tail])
-    else:
-        run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
-                 "-filter_complex", f"[0:v]{vfilter}[v];{apad}",
+        inputs += ["-stream_loop", "-1", "-i", str(track)]
+        audio_parts.append(f"[{idx}:a]volume={gain}[m]")
+        mix_labels.append("[m]")
+        idx += 1
+    if whoosh:
+        inputs += ["-i", str(whoosh)]
+        audio_parts.append(f"[{idx}:a]adelay={whoosh_delay_ms}|{whoosh_delay_ms},volume=0.6[w]")
+        mix_labels.append("[w]")
+        idx += 1
+    if len(mix_labels) == 1:  # voiceover only
+        audio_parts_final = ";".join(audio_parts)
+        run_cmd([ff, "-y", *inputs,
+                 "-filter_complex", audio_parts_final,
                  "-map", "[v]", "-map", "[vo]", *tail])
+    else:
+        mix = f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:normalize=0[a]"
+        run_cmd([ff, "-y", *inputs,
+                 "-filter_complex", ";".join(audio_parts + [mix]),
+                 "-map", "[v]", "-map", "[a]", *tail])
     return final
