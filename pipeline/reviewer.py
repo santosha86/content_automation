@@ -79,6 +79,16 @@ def _parse_caption_cues(subs: Path) -> list[dict]:
     return cues
 
 
+def _rec_usage(provider: str, model: str, in_tok: int, out_tok: int) -> None:
+    try:
+        from . import usage
+        usage.record("llm", station="reviewer", stage="reviewer.grade",
+                     provider=provider, model=model,
+                     input_tokens=in_tok or 0, output_tokens=out_tok or 0)
+    except Exception:
+        pass
+
+
 def _grade_openrouter(system: str, frames: list, payload_text: str) -> dict | None:
     """Vision grade via OpenRouter (OpenAI-style image_url blocks) so the whole pipeline
     can run on a single OpenRouter recharge. Returns None to let the caller fall back."""
@@ -100,7 +110,10 @@ def _grade_openrouter(system: str, frames: list, payload_text: str) -> dict | No
             timeout=600,
         )
         resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"]
+        data = resp.json()
+        u = data.get("usage") or {}
+        _rec_usage("openrouter", model, u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+        text = data["choices"][0]["message"]["content"]
         m = re.search(r"\{.*\}", text, re.DOTALL)
         return json.loads(m.group(0))
     except Exception as e:
@@ -168,6 +181,9 @@ def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str)
                 )
                 if msg.stop_reason == "refusal":
                     continue  # refusal -> fall back to next model per reviewer prompt
+                u = getattr(msg, "usage", None)
+                _rec_usage("anthropic", attempt_model,
+                           getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0))
                 text = "".join(b.text for b in msg.content if b.type == "text")
                 m = re.search(r"\{.*\}", text, re.DOTALL)
                 report = json.loads(m.group(0))

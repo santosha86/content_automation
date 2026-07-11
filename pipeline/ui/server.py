@@ -140,6 +140,172 @@ def set_run_status(slug: str, body: dict):
     return {"ok": True}
 
 
+RUNS_DIR = ROOT / "output" / "runs"
+
+# Free/local stages that never cost anything — listed in the detail view as "$0 · local"
+# so the drill-down accounts for the whole pipeline, not just the paid calls.
+FREE_STAGES = ["strategist.github_scrape", "visuals.flux", "visuals.pexels",
+               "voice.kokoro", "editor.assemble", "editor.transcribe", "packager", "screencap"]
+
+
+def _pricing() -> dict:
+    path = ROOT / "config" / "pricing.yaml"
+    if not path.exists():
+        return {}
+    try:
+        return yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return {}
+
+
+def _price_record(rec: dict, pricing: dict):
+    """(cost_usd, priced) for one usage record. priced=False => 'unpriced' (unknown model),
+    distinct from a real $0 (local/free). Ollama is always a real $0."""
+    kind = rec.get("kind")
+    if kind == "llm":
+        if rec.get("provider") == "ollama":
+            return 0.0, True
+        row = (pricing.get("llm") or {}).get(rec.get("model", ""))
+        if not row:
+            return None, False
+        cost = (rec.get("input_tokens", 0) / 1e6) * row.get("input", 0) \
+             + (rec.get("output_tokens", 0) / 1e6) * row.get("output", 0)
+        return cost, True
+    if kind == "tts":
+        row = (pricing.get("tts") or {}).get(rec.get("provider", ""))
+        if not row:
+            return None, False
+        return (rec.get("characters", 0) / 1000.0) * row.get("per_1k_chars", 0), True
+    if kind == "search":
+        row = (pricing.get("search") or {}).get(rec.get("provider", ""))
+        if not row:
+            return None, False
+        return rec.get("requests", 0) * row.get("per_request", 0), True
+    return None, False
+
+
+def _iter_records(doc: dict):
+    for session in doc.get("sessions", []):
+        for rec in session.get("records", []):
+            yield session, rec
+
+
+def _summarize_usage(doc: dict, pricing: dict) -> dict:
+    cost, in_tok, out_tok, llm_calls, unpriced = 0.0, 0, 0, 0, False
+    providers = set()
+    for _, rec in _iter_records(doc):
+        providers.add(rec.get("provider", "?"))
+        if rec.get("kind") == "llm":
+            llm_calls += 1
+            in_tok += rec.get("input_tokens", 0)
+            out_tok += rec.get("output_tokens", 0)
+        c, priced = _price_record(rec, pricing)
+        if not priced:
+            unpriced = True
+        elif c:
+            cost += c
+    return {"cost_usd": round(cost, 4), "input_tokens": in_tok, "output_tokens": out_tok,
+            "llm_calls": llm_calls, "providers": sorted(providers), "has_unpriced": unpriced}
+
+
+def _run_title_status(slug: str) -> tuple[str, str]:
+    """Best-effort title + review status for a slug (review metadata, else storyboard, else slug)."""
+    meta_path = REVIEW_DIR / slug / "metadata.json"
+    if meta_path.exists():
+        try:
+            m = json.loads(meta_path.read_text())
+            title = (m.get("youtube") or {}).get("title") or (m.get("topic") or {}).get("title") or slug
+            return title, m.get("status", "pending_review")
+        except Exception:
+            pass
+    sb = RUNS_DIR / slug / "storyboard.json"
+    if sb.exists():
+        try:
+            return json.loads(sb.read_text()).get("topic", {}).get("title", slug), "no_render"
+        except Exception:
+            pass
+    return slug, "no_render"
+
+
+@app.get("/api/usage")
+def usage_overview():
+    """All tracked videos with tokens + computed spend, plus untracked (pre-instrumentation)."""
+    pricing = _pricing()
+    videos, tot_cost, tot_in, tot_out = [], 0.0, 0, 0
+    tracked_slugs = set()
+    if RUNS_DIR.exists():
+        for run in sorted(RUNS_DIR.iterdir(), reverse=True):
+            uj = run / "usage.json"
+            if not uj.exists():
+                continue
+            try:
+                doc = json.loads(uj.read_text())
+            except Exception:
+                continue
+            slug = doc.get("slug", run.name)
+            tracked_slugs.add(slug)
+            s = _summarize_usage(doc, pricing)
+            title, status = _run_title_status(slug)
+            tot_cost += s["cost_usd"]; tot_in += s["input_tokens"]; tot_out += s["output_tokens"]
+            videos.append({"slug": slug, "title": title, "date": slug[:10], "status": status,
+                           "tracked": True, **s})
+    # untracked: rendered videos with no usage.json (predate instrumentation)
+    untracked = 0
+    if REVIEW_DIR.exists():
+        for folder in sorted(REVIEW_DIR.iterdir(), reverse=True):
+            if folder.is_dir() and folder.name not in tracked_slugs:
+                title, status = _run_title_status(folder.name)
+                videos.append({"slug": folder.name, "title": title, "date": folder.name[:10],
+                               "status": status, "tracked": False, "cost_usd": None,
+                               "input_tokens": 0, "output_tokens": 0, "llm_calls": 0,
+                               "providers": [], "has_unpriced": False})
+                untracked += 1
+    videos.sort(key=lambda v: v["slug"], reverse=True)
+    return {"totals": {"cost_usd": round(tot_cost, 3), "input_tokens": tot_in,
+                       "output_tokens": tot_out, "videos_tracked": len(tracked_slugs),
+                       "videos_untracked": untracked}, "videos": videos}
+
+
+@app.get("/api/usage/{slug}")
+def usage_detail(slug: str):
+    """Per-session, per-stage breakdown for one video."""
+    uj = RUNS_DIR / slug / "usage.json"
+    if not uj.exists():
+        raise HTTPException(404, "no usage recorded for this run")
+    doc = json.loads(uj.read_text())
+    pricing = _pricing()
+    sessions_out = []
+    for session in doc.get("sessions", []):
+        groups: dict[str, dict] = {}
+        sess_cost = 0.0
+        for rec in session.get("records", []):
+            g = groups.setdefault(rec.get("stage", "?"), {
+                "stage": rec.get("stage", "?"), "kind": rec.get("kind"), "calls": 0,
+                "models": set(), "providers": set(), "input_tokens": 0, "output_tokens": 0,
+                "characters": 0, "requests": 0, "cost_usd": 0.0, "unpriced": False})
+            g["calls"] += 1
+            if rec.get("model"): g["models"].add(rec["model"])
+            g["providers"].add(rec.get("provider", "?"))
+            g["input_tokens"] += rec.get("input_tokens", 0)
+            g["output_tokens"] += rec.get("output_tokens", 0)
+            g["characters"] += rec.get("characters", 0)
+            g["requests"] += rec.get("requests", 0)
+            c, priced = _price_record(rec, pricing)
+            if not priced:
+                g["unpriced"] = True
+            elif c:
+                g["cost_usd"] += c; sess_cost += c
+        stages = []
+        for g in groups.values():
+            g["models"] = sorted(g["models"]); g["providers"] = sorted(g["providers"])
+            g["cost_usd"] = round(g["cost_usd"], 4)
+            stages.append(g)
+        stages.sort(key=lambda x: x["cost_usd"] or 0, reverse=True)
+        sessions_out.append({"phase": session.get("phase"), "started_at": session.get("started_at"),
+                             "stages": stages, "cost_usd": round(sess_cost, 4)})
+    return {"slug": slug, "sessions": sessions_out, "free_stages": FREE_STAGES}
+
+
 @app.get("/api/checklist")
 def get_checklist():
     checklist = json.loads((ROOT / "checklist.schema.json").read_text())

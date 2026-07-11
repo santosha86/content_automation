@@ -91,6 +91,12 @@ def _elevenlabs(text: str, emotion: str, out_mp3: Path) -> None:
         )
         if resp.ok:
             out_mp3.write_bytes(resp.content)
+            try:  # ElevenLabs bills per character — record what we sent (best-effort)
+                from . import usage
+                usage.record("tts", station="voice", stage="voice.synthesize",
+                             provider="elevenlabs", model=model, characters=len(text))
+            except Exception:
+                pass
             return
         # Don't retry client errors (401 quota, 403, 400 bad model) — they won't fix
         # themselves and just waste time. Only retry rate-limits (429) and 5xx.

@@ -38,6 +38,7 @@ The LAST segment's overlay must be the CTA as 3-5 punchy words (e.g. "COMMENT AI
 it is rendered in the same kinetic style as the hook (bookend rule).""",
         system="You are an expert short-form video scriptwriter. Output valid JSON only.",
         station="writer",
+        stage="writer.script",
     )
     script["topic"] = topic
     return script

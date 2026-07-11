@@ -54,6 +54,7 @@ Reply with JSON only:
 ]}}""",
         system="You are an expert short-form hook writer. Output valid JSON only.",
         station="writer",
+        stage="hooksmith.variants",
     )
 
     variants = result.get("variants", [])[:3]

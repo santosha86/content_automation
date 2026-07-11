@@ -11,7 +11,7 @@ import datetime
 import json
 import re
 
-from . import editor, packager, reviewer, scout, storyboard_adapter, visuals, voice, writer
+from . import editor, packager, reviewer, scout, storyboard_adapter, usage, visuals, voice, writer
 from .util import ROOT, media_duration
 
 
@@ -55,6 +55,7 @@ def main():
 
         print("[2/7] writer: generating script...")
         script = writer.write_script(topic)
+    usage.bind(run_dir, phase="render")  # flush any buffered scout/writer records, then track the render
     (run_dir / "script.json").write_text(json.dumps(script, indent=2))
     print(f"      -> {len(script['segments'])} segments, hook: \"{script['hook_text']}\"")
 

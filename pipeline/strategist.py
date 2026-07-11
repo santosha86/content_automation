@@ -75,6 +75,12 @@ def fetch_tavily(limit: int = 10) -> list[dict]:
         })
         resp.raise_for_status()
         results = resp.json().get("results", [])
+        try:  # Tavily bills per request
+            from . import usage
+            usage.record("search", station="scout", stage="strategist.tavily",
+                         provider="tavily", requests=1)
+        except Exception:
+            pass
     except Exception:
         return []
     out = []
@@ -144,6 +150,7 @@ Return exactly {n} entries (or fewer only if fewer candidates exist), best first
 Never invent a name_anchor the story does not genuinely involve.""",
         system="You are a precise short-form content strategist. Output valid JSON only.",
         station="scout",
+        stage="strategist.rank",
     )
 
     stories = []

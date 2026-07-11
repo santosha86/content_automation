@@ -323,7 +323,7 @@ async function setStatus(slug, status) {
 }
 
 // ---------- view tabs ----------
-const views = { studio: $("#view-studio"), evals: $("#view-evals"), config: $("#view-config") };
+const views = { studio: $("#view-studio"), usage: $("#view-usage"), evals: $("#view-evals"), config: $("#view-config") };
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => {
@@ -334,8 +334,95 @@ document.querySelectorAll(".tab").forEach((tab) => {
     Object.entries(views).forEach(([name, el]) => { el.hidden = name !== tab.dataset.view; });
     if (tab.dataset.view === "config") loadConfig();
     if (tab.dataset.view === "evals") loadEvals();
+    if (tab.dataset.view === "usage") loadUsage();
   });
 });
+
+// ---------- usage ----------
+function fmtMoney(v) { return v === null || v === undefined ? "—" : "$" + v.toFixed(v < 1 ? 3 : 2); }
+function fmtTok(n) { return !n ? "0" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n); }
+
+async function loadUsage() {
+  const tiles = $("#usage-tiles"), rows = $("#usage-rows"), empty = $("#usage-empty");
+  tiles.innerHTML = ""; rows.innerHTML = "";
+  let data;
+  try { data = await (await fetch("/api/usage")).json(); }
+  catch { tiles.innerHTML = `<div class="muted">Failed to load usage.</div>`; return; }
+  const t = data.totals || {};
+  const spentThisMonth = (data.videos || []).filter(v => v.tracked && (v.date || "").slice(0, 7) === new Date().toISOString().slice(0, 7))
+    .reduce((a, v) => a + (v.cost_usd || 0), 0);
+  const avg = t.videos_tracked ? t.cost_usd / t.videos_tracked : 0;
+  const tileData = [
+    ["Total spend", fmtMoney(t.cost_usd), `${t.videos_tracked || 0} videos tracked`],
+    ["This month", fmtMoney(spentThisMonth), "current calendar month"],
+    ["Avg / video", fmtMoney(avg), "across tracked videos"],
+    ["Tokens (all)", fmtTok((t.input_tokens || 0) + (t.output_tokens || 0)), `${fmtTok(t.input_tokens)} in · ${fmtTok(t.output_tokens)} out`],
+  ];
+  tiles.innerHTML = tileData.map(([label, big, sub]) =>
+    `<div class="usage-tile"><div class="usage-tile-label">${label}</div><div class="usage-tile-value">${big}</div><div class="usage-tile-sub">${sub}</div></div>`).join("");
+
+  const vids = data.videos || [];
+  empty.hidden = vids.length > 0;
+  rows.innerHTML = vids.map(v => {
+    const chips = (v.providers || []).map(p =>
+      `<span class="chip ${["anthropic", "openrouter", "elevenlabs", "tavily"].includes(p) ? "chip-paid" : ""}">${escapeHtml(p)}</span>`).join("");
+    const unpriced = v.has_unpriced ? ` <span class="chip chip-warn">unpriced</span>` : "";
+    const cls = v.tracked ? "" : "usage-untracked";
+    const cost = v.tracked ? fmtMoney(v.cost_usd) : `<span class="muted">not tracked</span>`;
+    const toggle = v.tracked ? `<button class="btn-link usage-detail-btn" data-slug="${escapeHtml(v.slug)}">details ▾</button>` : "";
+    return `<tr class="${cls}">
+      <td class="mono">${escapeHtml(v.date || "")}</td>
+      <td class="usage-title" title="${escapeHtml(v.title || "")}">${escapeHtml(v.title || v.slug)}</td>
+      <td class="num">${fmtTok(v.input_tokens)}</td>
+      <td class="num">${fmtTok(v.output_tokens)}</td>
+      <td class="num">${v.llm_calls || 0}</td>
+      <td>${chips}${unpriced}</td>
+      <td class="num">${cost}</td>
+      <td>${toggle}</td>
+    </tr>
+    <tr class="usage-detail-row" id="detail-${escapeHtml(v.slug)}" hidden><td colspan="8"></td></tr>`;
+  }).join("");
+
+  rows.querySelectorAll(".usage-detail-btn").forEach(btn =>
+    btn.addEventListener("click", () => toggleUsageDetail(btn.dataset.slug, btn)));
+}
+
+async function toggleUsageDetail(slug, btn) {
+  const row = document.getElementById("detail-" + slug);
+  if (!row) return;
+  if (!row.hidden) { row.hidden = true; btn.textContent = "details ▾"; return; }
+  btn.textContent = "details ▴";
+  const cell = row.querySelector("td");
+  cell.innerHTML = `<div class="muted">Loading…</div>`;
+  row.hidden = false;
+  let d;
+  try { d = await (await fetch("/api/usage/" + encodeURIComponent(slug))).json(); }
+  catch { cell.innerHTML = `<div class="muted">Failed to load detail.</div>`; return; }
+  const sessions = (d.sessions || []).map(s => {
+    const stageRows = (s.stages || []).map(g => {
+      const cost = g.unpriced ? `<span class="chip chip-warn">unpriced</span>` : (g.cost_usd ? fmtMoney(g.cost_usd) : "—");
+      const extra = g.characters ? `${g.characters} chars` : g.requests ? `${g.requests} req` : "";
+      return `<tr>
+        <td>${escapeHtml(g.stage)}</td>
+        <td class="num">${g.calls}</td>
+        <td class="mono">${escapeHtml((g.models || []).join(", ") || g.providers.join(", "))}</td>
+        <td class="num">${fmtTok(g.input_tokens)}</td>
+        <td class="num">${fmtTok(g.output_tokens)}</td>
+        <td class="num">${extra || cost}${extra ? " · " + cost : ""}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="usage-session">
+      <div class="usage-session-head"><strong>${escapeHtml(s.phase || "")}</strong>
+        <span class="muted">${escapeHtml((s.started_at || "").replace("T", " ").replace("Z", ""))}</span>
+        <span class="usage-session-cost">${fmtMoney(s.cost_usd)}</span></div>
+      <table class="usage-stage-table"><thead><tr>
+        <th>Stage</th><th class="num">Calls</th><th>Model</th><th class="num">In</th><th class="num">Out</th><th class="num">Cost</th>
+      </tr></thead><tbody>${stageRows}</tbody></table>
+    </div>`;
+  }).join("");
+  const free = (d.free_stages || []).map(f => `<span class="chip">${escapeHtml(f)}</span>`).join(" ");
+  cell.innerHTML = sessions + `<div class="usage-free"><span class="muted">Free · local ($0):</span> ${free}</div>`;
+}
 
 // ---------- evals ----------
 const evalsList = $("#evals-list");

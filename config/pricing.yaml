@@ -1,0 +1,21 @@
+# Prices applied at READ time by the dashboard. Raw counts live in each run's usage.json;
+# edit here to retro-correct every historical video. Unknown model => "unpriced" (never
+# silently $0). Provider 'ollama' is always $0 regardless of model name.
+# Verify OpenRouter slug prices at openrouter.ai/models (they change).
+llm:  # USD per 1M tokens
+  # Anthropic direct (model ids as sent to the Anthropic API)
+  claude-sonnet-5:            {input: 3.00,  output: 15.00}
+  claude-opus-4-8:            {input: 5.00,  output: 25.00}
+  claude-haiku-4-5:           {input: 1.00,  output: 5.00}
+  # OpenRouter slugs (pass-through pricing; adjust to the live rate)
+  "anthropic/claude-sonnet-4.5":      {input: 3.00,  output: 15.00}
+  "anthropic/claude-opus-4.1":        {input: 15.00, output: 75.00}
+  "anthropic/claude-3.7-sonnet":      {input: 3.00,  output: 15.00}
+  "openai/gpt-4o-mini":               {input: 0.15,  output: 0.60}
+  "google/gemini-2.5-flash":          {input: 0.30,  output: 2.50}
+  "deepseek/deepseek-chat-v3.1:free": {input: 0,     output: 0}
+  gpt-oss:                    {input: 0,     output: 0}   # Ollama local
+tts:  # USD per 1K characters
+  elevenlabs: {per_1k_chars: 0.30}   # adjust to your ElevenLabs plan
+search:  # USD per request
+  tavily: {per_request: 0.008}       # adjust to your Tavily plan

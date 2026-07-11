@@ -164,6 +164,7 @@ Reply with JSON only:
 Use transition_in "flash" only on the hook->body cut (beat 2). {fix_note}""",
         system="You are a short-form video Director. Output valid JSON only.",
         station="writer",
+        stage="director.storyboard",
     )
 
 

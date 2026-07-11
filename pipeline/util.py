@@ -95,36 +95,57 @@ def _effective_provider(provider: str) -> str:
     return provider
 
 
+def _record_usage(station, stage, provider, model, in_tok, out_tok, ms):
+    """Best-effort usage capture — never let it break a call."""
+    try:
+        from . import usage
+        usage.record("llm", station=station or "", stage=stage or station or "llm",
+                     provider=provider, model=model,
+                     input_tokens=in_tok or 0, output_tokens=out_tok or 0, duration_ms=ms)
+    except Exception:
+        pass
+
+
 def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = "",
-        provider: str = "", model: str = "") -> str:
-    # Provider ladder: per-station choice from controls.yaml, else env, else anthropic.
+        provider: str = "", model: str = "", stage: str = "") -> str:
+    # Provider ladder: per-station choice from controls.yaml, else env, else openrouter.
     # Missing keys degrade to a provider that has one (see _effective_provider) so the
     # pipeline never dead-ends. `provider`/`model` force a specific rung — the eval
-    # harness uses this to benchmark the same station across providers.
+    # harness uses this to benchmark the same station across providers. `stage` is the
+    # usage-dashboard label (defaults to station).
+    import time
     if not provider:
         if station:
             provider = station_provider(station, os.getenv("LLM_PROVIDER", "openrouter"))
         else:
             provider = os.getenv("LLM_PROVIDER", "openrouter")
     provider = _effective_provider(provider)
+    t0 = time.time()
     if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
         import anthropic
+        used_model = model or os.getenv("LLM_MODEL", "claude-sonnet-5")
         client = anthropic.Anthropic()
         msg = client.messages.create(
-            model=model or os.getenv("LLM_MODEL", "claude-sonnet-5"),
+            model=used_model,
             max_tokens=max_tokens,
             system=system or "You are a precise assistant.",
             output_config={"effort": "medium"},
             messages=[{"role": "user", "content": prompt}],
         )
+        u = getattr(msg, "usage", None)
+        _record_usage(station, stage, "anthropic", used_model,
+                      getattr(u, "input_tokens", 0), getattr(u, "output_tokens", 0),
+                      int((time.time() - t0) * 1000))
         return "".join(b.text for b in msg.content if b.type == "text")
     if provider == "openrouter" and os.getenv("OPENROUTER_API_KEY"):
+        used_model = model or os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=_openrouter_headers(),
             json={
-                "model": model or os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5"),
+                "model": used_model,
                 "max_tokens": max_tokens,
+                "usage": {"include": True},
                 "messages": [
                     {"role": "system", "content": system or "You are a precise assistant."},
                     {"role": "user", "content": prompt},
@@ -133,12 +154,18 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = ""
             timeout=600,
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        data = resp.json()
+        u = data.get("usage") or {}
+        _record_usage(station, stage, "openrouter", used_model,
+                      u.get("prompt_tokens", 0), u.get("completion_tokens", 0),
+                      int((time.time() - t0) * 1000))
+        return data["choices"][0]["message"]["content"]
     # local rung (ollama)
+    used_model = model or os.getenv("OLLAMA_MODEL", "gpt-oss")
     resp = requests.post(
         "http://localhost:11434/api/chat",
         json={
-            "model": model or os.getenv("OLLAMA_MODEL", "gpt-oss"),
+            "model": used_model,
             "messages": [
                 {"role": "system", "content": system or "You are a precise assistant."},
                 {"role": "user", "content": prompt},
@@ -148,13 +175,17 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = ""
         timeout=600,
     )
     resp.raise_for_status()
-    return resp.json()["message"]["content"]
+    data = resp.json()
+    _record_usage(station, stage, "ollama", used_model,
+                  data.get("prompt_eval_count", 0), data.get("eval_count", 0),
+                  int((time.time() - t0) * 1000))
+    return data["message"]["content"]
 
 
 def llm_json(prompt: str, system: str = "", station: str = "",
-             provider: str = "", model: str = "") -> dict | list:
+             provider: str = "", model: str = "", stage: str = "") -> dict | list:
     """Call the LLM and parse a JSON object/array out of the reply."""
-    text = llm(prompt, system, station=station, provider=provider, model=model)
+    text = llm(prompt, system, station=station, provider=provider, model=model, stage=stage)
     match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if match:
         text = match.group(1)

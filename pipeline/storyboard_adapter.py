@@ -70,6 +70,7 @@ Reply JSON only:
   "hashtags": ["<4-5 tags without #>"]}}""",
             system="You write short-form video metadata. Output valid JSON only.",
             station="writer",
+            stage="adapter.metadata",
         )
     except Exception:
         # Never let metadata generation block a render — ship a usable default.

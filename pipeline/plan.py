@@ -16,7 +16,7 @@ import datetime
 import json
 import re
 
-from . import checkpoints, director, hooksmith, scriptwriter, strategist
+from . import checkpoints, director, hooksmith, scriptwriter, strategist, usage
 from .util import ROOT
 
 
@@ -91,6 +91,7 @@ def plan(topic: str = "", article_url: str = "", log=print) -> dict:
     slug = f"{datetime.date.today()}-{_slugify(story['title'])}"
     run_dir = ROOT / "output" / "runs" / slug
     run_dir.mkdir(parents=True, exist_ok=True)
+    usage.bind(run_dir, phase="plan")  # flush buffered strategist/hook/writer/director records
     (run_dir / "storyboard.json").write_text(json.dumps(storyboard, indent=2))
     (run_dir / "plan.json").write_text(json.dumps({
         "story": story, "candidates_top3": [s["title"] for s in stories] if not topic else [topic],

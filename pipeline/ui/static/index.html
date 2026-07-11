@@ -18,6 +18,7 @@
     <div class="topbar-right">
       <nav class="tabs" role="tablist">
         <button class="tab active" data-view="studio" role="tab" aria-selected="true">Studio</button>
+        <button class="tab" data-view="usage" role="tab" aria-selected="false">Usage</button>
         <button class="tab" data-view="evals" role="tab" aria-selected="false">Evals</button>
         <button class="tab" data-view="config" role="tab" aria-selected="false">Config</button>
       </nav>
@@ -68,6 +69,28 @@
       </div>
     </section>
 
+  </main>
+
+  <main class="page" id="view-usage" hidden>
+    <section class="config-panel">
+      <div class="section-head">
+        <h2>Usage &amp; spend</h2>
+        <span class="muted">per-video token consumption + cost · prices from config/pricing.yaml (edited retroactively)</span>
+      </div>
+      <div class="usage-tiles" id="usage-tiles"></div>
+      <div class="usage-table-wrap">
+        <table class="usage-table" id="usage-table">
+          <thead><tr>
+            <th>Date</th><th>Video</th><th class="num">Tokens in</th><th class="num">Tokens out</th>
+            <th class="num">LLM calls</th><th>Providers</th><th class="num">Cost</th><th></th>
+          </tr></thead>
+          <tbody id="usage-rows"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="usage-empty" hidden>
+        <p>No usage tracked yet. Run <code>make plan</code> or generate a video — spend is captured automatically.</p>
+      </div>
+    </section>
   </main>
 
   <main class="page" id="view-evals" hidden>

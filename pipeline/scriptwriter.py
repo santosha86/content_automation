@@ -68,6 +68,7 @@ Use 3 to {cfg['max_segments']} beats totaling ~{cfg['target_seconds']}s
 The last beat's overlay is the CTA (3-5 punchy words, hook style).""",
         system="You are an expert short-form scriptwriter. Output valid JSON only.",
         station="writer",
+        stage="scriptwriter.draft",
     )
 
 
@@ -98,6 +99,7 @@ Reply with JSON only:
 }}""",
         system="You are a demanding short-form content critic. Output valid JSON only.",
         station="reviewer",
+        stage="scriptwriter.critique",
     )
 
 

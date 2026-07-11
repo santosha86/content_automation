@@ -71,6 +71,7 @@ Articles:
 
 Reply with JSON: {{"index": <int>, "why": "<one sentence>"}}""",
         station="scout",
+        stage="scout.pick",
     )
     chosen = candidates[int(result["index"])]
     chosen["why"] = result.get("why", "")
