@@ -92,6 +92,10 @@ def _elevenlabs(text: str, emotion: str, out_mp3: Path) -> None:
         if resp.ok:
             out_mp3.write_bytes(resp.content)
             return
+        # Don't retry client errors (401 quota, 403, 400 bad model) — they won't fix
+        # themselves and just waste time. Only retry rate-limits (429) and 5xx.
+        if resp.status_code not in (429,) and resp.status_code < 500:
+            resp.raise_for_status()
         if attempt < 2:
             print(f"  [voice] elevenlabs {resp.status_code}, retrying...")
             time.sleep(3 * (attempt + 1))
@@ -115,19 +119,63 @@ def _macos_say(text: str, out_mp3: Path) -> None:
     aiff.unlink()
 
 
+import hashlib
+import shutil
+
+CACHE_DIR = ROOT / "state" / "tts_cache"
+
+
+def _cache_key(provider: str, voice: str, model: str, emotion: str, text: str) -> str:
+    """Identity of a synthesized clip. Re-renders with the SAME text/voice reuse the
+    cached audio instead of re-synthesizing — critical for paid ElevenLabs, so iterating
+    on visuals never re-bills the voiceover."""
+    raw = f"{provider}|{voice}|{model}|{emotion}|{text}"
+    return hashlib.sha1(raw.encode()).hexdigest()[:20]
+
+
+def _voice_id(provider: str) -> str:
+    cfg = settings().get("voice", {})
+    if provider == "elevenlabs":
+        return os.getenv("ELEVENLABS_VOICE_ID", "nPczCjzI2devNBz1zQrb")
+    if provider == "kokoro":
+        return cfg.get("kokoro_voice", "am_michael")
+    return "say"
+
+
 def synthesize(script: dict, run_dir: Path) -> list[Path]:
-    """One audio file per segment; returns paths in order."""
+    """One audio file per segment; returns paths in order. Cached by text+voice so
+    re-renders don't re-synthesize (and don't re-bill paid providers)."""
     provider = station_provider("voice", settings().get("voice", {}).get("provider", "kokoro"))
     if provider == "elevenlabs" and not os.getenv("ELEVENLABS_API_KEY"):
         print("  [voice] provider=elevenlabs but no ELEVENLABS_API_KEY — falling back to kokoro")
         provider = "kokoro"
-    print(f"  [voice] provider: {provider}")
+    model = settings().get("voice", {}).get("model", "") if provider == "elevenlabs" else ""
+    voice = _voice_id(provider)
+    print(f"  [voice] provider: {provider} (voice {voice})")
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     paths = []
+    hits = 0
     for i, seg in enumerate(script["segments"]):
         out = run_dir / f"seg_{i:02d}.mp3"
         emotion = seg.get("emotion", "")
+        cached = CACHE_DIR / f"{_cache_key(provider, voice, model, emotion, seg['voiceover'])}.mp3"
+        if cached.exists():
+            shutil.copyfile(cached, out)
+            hits += 1
+            paths.append(out)
+            continue
         if provider == "elevenlabs":
-            _elevenlabs(seg["voiceover"], emotion, out)
+            try:
+                _elevenlabs(seg["voiceover"], emotion, out)
+            except Exception as e:
+                # e.g. the API key's per-key character cap is exhausted (quota_exceeded).
+                # Don't crash the render — drop to free local Kokoro for the rest of it.
+                print(f"  [voice] elevenlabs failed ({str(e)[:120]}) — falling back to kokoro for this run")
+                provider, voice, model = "kokoro", _voice_id("kokoro"), ""
+                cached = CACHE_DIR / f"{_cache_key(provider, voice, model, emotion, seg['voiceover'])}.mp3"
+                if cached.exists():
+                    shutil.copyfile(cached, out); paths.append(out); continue
+                _kokoro_tts(seg["voiceover"], emotion, out)
         elif provider == "kokoro":
             try:
                 _kokoro_tts(seg["voiceover"], emotion, out)
@@ -137,5 +185,8 @@ def synthesize(script: dict, run_dir: Path) -> list[Path]:
         else:
             _macos_say(seg["voiceover"], out)
         _trim_silence(out)
+        shutil.copyfile(out, cached)  # store the finished (trimmed) clip for reuse
         paths.append(out)
+    if hits:
+        print(f"  [voice] {hits}/{len(paths)} segments served from cache (no re-synthesis)")
     return paths

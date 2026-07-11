@@ -10,5 +10,5 @@ providers:
   scout: anthropic
   writer: anthropic
   reviewer: anthropic
-  voice: kokoro
+  voice: elevenlabs
   broll: pexels

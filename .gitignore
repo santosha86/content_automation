@@ -10,3 +10,4 @@ assets/music/*
 *.mp3
 *.wav
 *.aiff
+state/tts_cache/
