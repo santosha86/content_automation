@@ -11,6 +11,7 @@ FLUX is what makes generated beats actually depict the narration (the Director w
 prompt; concept.continuity + negative_prompt are prepended by the adapter), instead of
 falling back to generic stock that doesn't match the words.
 """
+import hashlib
 import os
 import shutil
 import subprocess
@@ -51,10 +52,21 @@ def _flux_available() -> bool:
     return _flux_bin() is not None
 
 
-def _flux_generate(prompt: str, negative: str, out_png: Path) -> bool:
+def _looks_like_noise(png: Path) -> bool:
+    """A degenerate (noise) render barely compresses, so its PNG is far larger than a
+    real image at the same size. Cheap guard against a bad generation shipping silently
+    (e.g. incomplete weights, transient memory pressure). ~2.2 bytes/px is well above
+    real images (~1-1.5) and below noise (~4)."""
+    try:
+        return png.stat().st_size > int(_GEN_WIDTH * _GEN_HEIGHT * 2.2)
+    except OSError:
+        return True
+
+
+def _flux_generate(prompt: str, negative: str, out_png: Path, seed: int) -> bool:
     args = [
         _flux_bin(), "--model", _FLUX_MODEL, "--prompt", prompt,
-        "--steps", str(_FLUX_STEPS), "--seed", "42", "--quantize", "4", "--low-ram",
+        "--steps", str(_FLUX_STEPS), "--seed", str(seed), "--quantize", "4", "--low-ram",
         "--height", str(_GEN_HEIGHT), "--width", str(_GEN_WIDTH),
         "--output", str(out_png),
     ]
@@ -77,12 +89,18 @@ def _flux_generate(prompt: str, negative: str, out_png: Path) -> bool:
 
 def generate(shot: dict, out_png: Path) -> Path | None:
     """Generate a still for a shot, or None if no local generator / it fails
-    (caller then falls back to stock or a gradient)."""
+    (caller then falls back to stock or a gradient). Seeds off the prompt so shots
+    differ; retries with a new seed if the output looks like noise."""
     prompt = (shot.get("prompt") or "").strip()
     if not prompt or not _flux_available():
         return None
     neg = (shot.get("negative_prompt") or "").strip()
-    return out_png if _flux_generate(prompt, neg, out_png) else None
+    base = int(hashlib.sha1(prompt.encode()).hexdigest(), 16) % 100000
+    for attempt in range(3):
+        if _flux_generate(prompt, neg, out_png, seed=base + attempt) and not _looks_like_noise(out_png):
+            return out_png
+        print(f"  [imagegen] attempt {attempt + 1} produced no/degenerate image, retrying with a new seed")
+    return None  # give up -> caller falls back to stock/gradient
 
 
 def status() -> str:
