@@ -38,12 +38,19 @@
             <input type="text" id="url-input" placeholder="https://...">
           </label>
         </div>
-        <button id="generate-btn" class="btn btn-primary">Generate video</button>
+        <div class="generate-buttons">
+          <button id="plan-btn" class="btn">Plan storyboard</button>
+          <button id="generate-btn" class="btn btn-primary">Generate video</button>
+        </div>
       </div>
       <div class="job-status" id="job-status" hidden>
         <div class="job-status-head">
           <span class="spinner" id="job-spinner"></span>
           <span id="job-status-text">Running…</span>
+        </div>
+        <div class="checkpoint-panel" id="checkpoint-panel" hidden>
+          <div class="checkpoint-prompt" id="checkpoint-prompt"></div>
+          <div class="checkpoint-choices" id="checkpoint-choices"></div>
         </div>
         <pre class="job-log" id="job-log"></pre>
       </div>

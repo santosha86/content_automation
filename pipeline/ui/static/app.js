@@ -21,10 +21,14 @@ const topicInput = $("#topic-input");
 const urlField = $("#url-field");
 const urlInput = $("#url-input");
 const generateBtn = $("#generate-btn");
+const planBtn = $("#plan-btn");
 const jobStatusEl = $("#job-status");
 const jobStatusText = $("#job-status-text");
 const jobSpinner = $("#job-spinner");
 const jobLog = $("#job-log");
+const checkpointPanel = $("#checkpoint-panel");
+const checkpointPrompt = $("#checkpoint-prompt");
+const checkpointChoices = $("#checkpoint-choices");
 
 topicInput.addEventListener("input", () => {
   urlField.hidden = topicInput.value.trim().length === 0;
@@ -32,9 +36,11 @@ topicInput.addEventListener("input", () => {
 
 let pollTimer = null;
 
-async function startGenerate() {
+async function startGenerate(mode) {
   generateBtn.disabled = true;
+  planBtn.disabled = true;
   const body = {};
+  if (mode === "director") body.mode = "director";
   if (topicInput.value.trim()) {
     body.topic = topicInput.value.trim();
     if (urlInput.value.trim()) body.article_url = urlInput.value.trim();
@@ -49,6 +55,7 @@ async function startGenerate() {
       const err = await res.json().catch(() => ({}));
       alert(err.detail || "Could not start generation.");
       generateBtn.disabled = false;
+      planBtn.disabled = false;
       return;
     }
     const { job_id } = await res.json();
@@ -56,27 +63,77 @@ async function startGenerate() {
   } catch (e) {
     alert("Could not reach the dashboard server.");
     generateBtn.disabled = false;
+    planBtn.disabled = false;
   }
 }
-generateBtn.addEventListener("click", startGenerate);
+generateBtn.addEventListener("click", () => startGenerate("video"));
+planBtn.addEventListener("click", () => startGenerate("director"));
 
 function renderJob(job) {
   jobStatusEl.hidden = false;
   jobLog.textContent = job.log.join("\n");
   jobLog.scrollTop = jobLog.scrollHeight;
-  if (job.status === "running") {
+  const running = job.status === "running";
+  generateBtn.disabled = running;
+  planBtn.disabled = running;
+  if (running) {
     jobSpinner.hidden = false;
-    jobStatusText.textContent = "Generating video…";
-    generateBtn.disabled = true;
+    jobStatusText.textContent = "Running…";
   } else if (job.status === "done") {
     jobSpinner.hidden = true;
-    jobStatusText.textContent = "Done — video ready for review below.";
-    generateBtn.disabled = false;
+    jobStatusText.textContent = "Done — see results below.";
+    hideCheckpoint();
   } else {
     jobSpinner.hidden = true;
     jobStatusText.textContent = "Failed — see log below.";
-    generateBtn.disabled = false;
+    hideCheckpoint();
   }
+}
+
+// ---------- checkpoints ----------
+let _pendingKey = null;
+function hideCheckpoint() {
+  checkpointPanel.hidden = true;
+  checkpointChoices.innerHTML = "";
+  _pendingKey = null;
+}
+
+function renderCheckpoint(pending) {
+  if (!pending) { hideCheckpoint(); return; }
+  const key = pending.name + ":" + (pending.choices || []).map((c) => c.label).join("|");
+  if (key === _pendingKey) return; // already rendered this exact prompt
+  _pendingKey = key;
+  checkpointPanel.hidden = false;
+  checkpointPrompt.textContent = pending.prompt || `Choose (${pending.name})`;
+  checkpointChoices.innerHTML = "";
+  (pending.choices || []).forEach((c, i) => {
+    const btn = document.createElement("button");
+    btn.className = "checkpoint-choice" + (i === pending.auto_index ? " recommended" : "");
+    btn.innerHTML = `
+      <div class="checkpoint-choice-label">${escapeHtml(c.label)}${i === pending.auto_index ? ' <span class="rec-tag">recommended</span>' : ""}</div>
+      ${c.detail ? `<div class="checkpoint-choice-detail">${escapeHtml(c.detail)}</div>` : ""}
+    `;
+    btn.addEventListener("click", () => decideCheckpoint(i));
+    checkpointChoices.appendChild(btn);
+  });
+}
+
+async function decideCheckpoint(choice) {
+  checkpointChoices.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  await fetch("/api/checkpoint/decide", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ choice }),
+  });
+  hideCheckpoint();
+}
+
+async function pollCheckpoint() {
+  try {
+    const res = await fetch("/api/checkpoint");
+    const { pending } = await res.json();
+    renderCheckpoint(pending);
+  } catch (e) { /* transient */ }
 }
 
 function watchJob(jobId) {
@@ -87,8 +144,11 @@ function watchJob(jobId) {
     if (!res.ok) { clearInterval(pollTimer); return; }
     const job = await res.json();
     renderJob(job);
-    if (job.status !== "running") {
+    if (job.status === "running") {
+      pollCheckpoint();
+    } else {
       clearInterval(pollTimer);
+      hideCheckpoint();
       if (wasRunning) loadRuns();
       wasRunning = false;
     }

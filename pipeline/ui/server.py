@@ -33,13 +33,15 @@ def _run_env() -> dict:
     env = os.environ.copy()
     local_bin = str(Path.home() / ".local" / "bin")
     env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
+    # Tells checkpoints.py to pause manual stages for a dashboard decision (vs TTY/auto).
+    env["DASHBOARD_RUN"] = "1"
     return env
 
 
-def _run_job(job_id: int, args: list[str]) -> None:
+def _run_job(job_id: int, args: list[str], module: str = "pipeline.run") -> None:
     job = _jobs[job_id]
     proc = subprocess.Popen(
-        [sys.executable, "-m", "pipeline.run", *args],
+        [sys.executable, "-m", module, *args],
         cwd=str(ROOT), env=_run_env(),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
     )
@@ -55,6 +57,8 @@ def _run_job(job_id: int, args: list[str]) -> None:
 @app.post("/api/generate")
 def generate(body: dict = None):
     body = body or {}
+    # mode: "video" = full render (pipeline.run) · "director" = plan a storyboard (pipeline.plan)
+    module = "pipeline.plan" if body.get("mode") == "director" else "pipeline.run"
     args = []
     if body.get("topic"):
         args += ["--topic", body["topic"]]
@@ -68,7 +72,7 @@ def generate(body: dict = None):
         job_id = next(_job_id_counter)
         _jobs[job_id] = {"id": job_id, "status": "running", "log": [], "started_at": time.time(), "finished_at": None}
 
-    threading.Thread(target=_run_job, args=(job_id, args), daemon=True).start()
+    threading.Thread(target=_run_job, args=(job_id, args, module), daemon=True).start()
     return {"job_id": job_id}
 
 
@@ -197,6 +201,35 @@ def set_config(body: dict):
             controls.setdefault(group, {})[key] = value
     CONTROLS_PATH.write_text(CONTROLS_HEADER + yaml.safe_dump(controls, sort_keys=False))
     return {"ok": True, "controls": controls}
+
+
+from ..checkpoints import PENDING, DECISION  # noqa: E402
+
+
+@app.get("/api/checkpoint")
+def get_checkpoint():
+    """The choice a paused run is waiting on, or null when nothing is pending."""
+    if not PENDING.exists():
+        return {"pending": None}
+    try:
+        return {"pending": json.loads(PENDING.read_text())}
+    except (json.JSONDecodeError, OSError):
+        return {"pending": None}
+
+
+@app.post("/api/checkpoint/decide")
+def decide_checkpoint(body: dict):
+    """Answer the pending checkpoint; the paused run picks this up and continues."""
+    if not PENDING.exists():
+        raise HTTPException(409, "No checkpoint is pending.")
+    pending = json.loads(PENDING.read_text())
+    choice = int(body.get("choice", pending.get("auto_index", 0)))
+    n = len(pending.get("choices", []))
+    if not (0 <= choice < n):
+        raise HTTPException(400, "choice out of range")
+    DECISION.parent.mkdir(parents=True, exist_ok=True)
+    DECISION.write_text(json.dumps({"name": pending["name"], "choice": choice}))
+    return {"ok": True}
 
 
 @app.get("/media/{slug}/video")
