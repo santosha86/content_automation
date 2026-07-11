@@ -25,4 +25,9 @@ eval:
 dashboard:
 	$(PYTHON) -m uvicorn pipeline.ui.server:app --port 8420 --reload
 
-.PHONY: setup video video-topic plan plan-topic eval dashboard
+# Dry-run by default (prints what WOULD post). Add --live + creds to actually publish:
+#   make publish SLUG=2026-07-11-... ARGS=--live
+publish:
+	$(PYTHON) -m pipeline.publisher $(SLUG) $(ARGS)
+
+.PHONY: setup video video-topic plan plan-topic eval dashboard publish
