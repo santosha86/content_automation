@@ -28,9 +28,11 @@ whisper:
   model: small
   compute_type: int8
 
-# Music bed (optional: drop royalty-free mp3s in assets/music/)
+# Music bed. Soft ambient pads are synthesized per mood (tech_minimal|suspense|driving|
+# uplift|calm); drop royalty-free mp3s in assets/music/<mood>/ to override with real tracks.
 music:
-  volume: 0.12
+  synth_volume: 0.55   # gain for generated pads (lower = subtler under the voice)
+  track_volume: 0.10   # gain for real mp3s you drop in (they're mastered loud)
 
 # Branded end-card (reference rule: one reusable end-card, identical every video, last ~2s)
 branding:

@@ -161,8 +161,8 @@ def _pick_music(script: dict, seconds: float, run_dir: Path) -> tuple[Path, floa
     present, else a synthesized bed). Returns (path, mix_gain) or None for mood 'none'."""
     from . import music
     mood = (script.get("music") or {}).get("mood", "tech_minimal")
-    vol = settings().get("music", {}).get("volume", 0.12)
-    return music.pick(mood, seconds, run_dir, track_volume=vol)
+    # music.pick reads music.synth_volume / music.track_volume from settings itself.
+    return music.pick(mood, seconds, run_dir)
 
 
 def _cut_shot(clip: Path, dur: float, camera: str, out: Path, fit: str) -> None:

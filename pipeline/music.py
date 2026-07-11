@@ -14,18 +14,28 @@ Everything is royalty-free by construction (your own files, or generated tones).
 import hashlib
 from pathlib import Path
 
-from .util import ROOT, ffmpeg_bin, run_cmd
+from .util import ROOT, ffmpeg_bin, run_cmd, settings
 
 MUSIC_DIR = ROOT / "assets" / "music"
 
-# Per-mood synthesized bed: a chord (Hz), a tremolo rate (movement), and a lowpass
-# cutoff (brightness). Tuned to sit UNDER narration, not compete with it.
+# Fixed set of soft ambient BEDS — pleasant pads that sit under narration, NOT the old
+# pulsing/echoey tones. Each is a low, warm chord with a slightly detuned voice for
+# richness, softened by a lowpass. No tremolo wobble, no metallic echo (those were the
+# "annoying" part). The Director's mood maps to one of these; drop real .mp3s in
+# assets/music/<mood>/ anytime to override a bed with a real track.
+#
+#   chord   — the notes (Hz), low register so it never masks the voice
+#   detune  — cents of detuning on a doubled voice for a warm chorus (0 = none)
+#   lowpass — brightness ceiling (lower = warmer/darker)
+#   swell   — very slow volume LFO depth for gentle life (0 = perfectly steady)
 _MOODS = {
-    "tech_minimal": {"chord": [110.0, 164.81, 220.0], "tremolo": 0.15, "lowpass": 900},   # A minor, calm
-    "suspense":     {"chord": [65.41, 98.0, 138.59],  "tremolo": 0.10, "lowpass": 600},   # low, tense
-    "driving":      {"chord": [98.0, 146.83, 196.0],  "tremolo": 2.60, "lowpass": 1100},  # pulsing
-    "uplift":       {"chord": [130.81, 164.81, 196.0], "tremolo": 0.20, "lowpass": 1300}, # C major, bright
+    "tech_minimal": {"chord": [110.0, 164.81, 220.0],  "detune": 8,  "lowpass": 800,  "swell": 0.06},  # A minor, calm
+    "suspense":     {"chord": [65.41, 98.0, 130.81],   "detune": 6,  "lowpass": 520,  "swell": 0.05},  # low, still, tense
+    "driving":      {"chord": [98.0, 146.83, 196.0],   "detune": 10, "lowpass": 1000, "swell": 0.10},  # fuller, gentle motion
+    "uplift":       {"chord": [130.81, 164.81, 196.0], "detune": 8,  "lowpass": 1200, "swell": 0.08},  # C major, warm bright
+    "calm":         {"chord": [98.0, 146.83, 220.0],   "detune": 7,  "lowpass": 900,  "swell": 0.05},  # neutral default pad
 }
+_DEFAULT_MOOD = "calm"
 
 
 def _real_track(mood: str) -> Path | None:
@@ -39,25 +49,29 @@ def _real_track(mood: str) -> Path | None:
 
 
 def _synth_bed(mood: str, seconds: float, out: Path) -> Path:
-    """Synthesize a soft ambient bed for the mood via ffmpeg lavfi (no assets needed)."""
-    spec = _MOODS.get(mood, _MOODS["tech_minimal"])
+    """Synthesize a soft ambient PAD for the mood via ffmpeg lavfi (no assets needed).
+    Warm, steady, no wobble/echo — pre-leveled quiet so it sits under the narration."""
+    spec = _MOODS.get(mood, _MOODS[_DEFAULT_MOOD])
     dur = max(seconds + 1.0, 2.0)
+    detune = spec.get("detune", 0)
+    # Build the chord; add a doubled, slightly detuned voice per note for a warm chorus.
+    freqs = list(spec["chord"])
+    if detune:
+        freqs += [f * (2 ** (detune / 1200.0)) for f in spec["chord"]]
     inputs = []
-    for f in spec["chord"]:
-        inputs += ["-f", "lavfi", "-i", f"sine=frequency={f}:duration={dur:.2f}"]
-    n = len(spec["chord"])
-    # Mix the chord, add slow movement (tremolo), soften (lowpass), add space (aecho),
-    # and a gentle fade in/out so it doesn't click. amix normalizes, so it stays quiet.
-    fade_out = max(dur - 1.2, 0)
-    chain = (
-        f"amix=inputs={n}:normalize=1,"
-        f"tremolo=f={spec['tremolo']}:d=0.4,"
-        f"lowpass=f={spec['lowpass']},"
-        f"aecho=0.8:0.9:80:0.3,"
-        f"afade=t=in:st=0:d=1.0,afade=t=out:st={fade_out:.2f}:d=1.2,"
-        f"volume=4.0"  # pre-level the bed to ~-24dB so the Editor mixes it at gain 1.0
-    )
+    for f in freqs:
+        inputs += ["-f", "lavfi", "-i", f"sine=frequency={f:.2f}:duration={dur:.2f}"]
+    n = len(freqs)
     labels = "".join(f"[{i}:a]" for i in range(n))
+    fade_out = max(dur - 1.6, 0)
+    swell = spec.get("swell", 0)
+    # Mix -> soften (two-stage lowpass for a gentle roll-off) -> optional slow swell ->
+    # long fades so it breathes in and out. amix normalize keeps it quiet by construction.
+    chain = f"amix=inputs={n}:normalize=1,lowpass=f={spec['lowpass']},lowpass=f={spec['lowpass']}"
+    if swell:
+        chain += f",tremolo=f=0.1:d={swell}"   # barely-there movement, not a pulse
+    chain += (f",afade=t=in:st=0:d=1.6,afade=t=out:st={fade_out:.2f}:d=1.6,"
+              f"volume=2.2")  # pre-level to ~a soft bed; pick() applies the final gain
     args = [ffmpeg_bin(), "-y", *inputs,
             "-filter_complex", f"{labels}{chain}[a]",
             "-map", "[a]", "-ar", "44100", str(out)]
@@ -65,20 +79,29 @@ def _synth_bed(mood: str, seconds: float, out: Path) -> Path:
     return out
 
 
-def pick(mood: str, seconds: float, run_dir: Path, track_volume: float = 0.12) -> tuple[Path, float] | None:
-    """Resolve the mood to (bed_path, mix_gain), or None when mood == 'none'/unknown.
+def _cfg() -> dict:
+    return settings().get("music", {}) or {}
 
-    Real tracks win and are mixed at `track_volume` (they're mastered loud). Synthesized
-    beds are pre-leveled to ~-24dB, so they mix at gain 1.0 (no further attenuation)."""
+
+def pick(mood: str, seconds: float, run_dir: Path, track_volume: float = None) -> tuple[Path, float] | None:
+    """Resolve the mood to (bed_path, mix_gain), or None when mood == 'none'.
+
+    Real tracks win and mix at `track_volume` (they're mastered loud). Synth pads are
+    pre-leveled, then scaled by music.synth_volume so the bed stays gentle under voice.
+    An unknown/blank mood falls back to the neutral 'calm' pad instead of going silent."""
     mood = (mood or "").strip().lower()
-    if mood in ("none", ""):
+    if mood == "none":
         return None
+    cfg = _cfg()
+    if track_volume is None:
+        track_volume = float(cfg.get("track_volume", 0.10))
+    synth_gain = float(cfg.get("synth_volume", 0.55))
+    if mood not in _MOODS:
+        mood = _DEFAULT_MOOD  # keep videos scored even if the Director picks an odd mood
     real = _real_track(mood)
     if real:
         return real, track_volume
-    if mood not in _MOODS:
-        return None
-    return _synth_bed(mood, seconds, run_dir / f"music_{mood}.wav"), 1.0
+    return _synth_bed(mood, seconds, run_dir / f"music_{mood}.wav"), synth_gain
 
 
 if __name__ == "__main__":
