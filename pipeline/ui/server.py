@@ -142,12 +142,61 @@ def get_checklist():
     return {"gate_b": checklist["gates"]["gate_b_pre_publish"]}
 
 
+CONTROLS_PATH = ROOT / "config" / "controls.yaml"
+
+CONTROL_OPTIONS = {
+    "checkpoints": {
+        "story_pick": ["auto", "manual"],
+        "hook_pick": ["auto", "manual"],
+        "script_approval": ["auto", "manual"],
+        "storyboard_approval": ["auto", "manual"],
+        "publish": ["auto", "manual"],
+    },
+    "providers": {
+        "scout": ["ollama", "openrouter", "anthropic"],
+        "writer": ["ollama", "openrouter", "anthropic"],
+        "reviewer": ["anthropic", "skip"],
+        "voice": ["kokoro", "elevenlabs", "say"],
+        "broll": ["pexels"],
+    },
+}
+
+CONTROLS_HEADER = (
+    "# Machine-writable control surface — the dashboard Config page reads/writes this file.\n"
+    "# (settings.yaml stays hand-edited; nothing in the UI touches it.)\n"
+)
+
+
+def _load_controls() -> dict:
+    if not CONTROLS_PATH.exists():
+        return {}
+    return yaml.safe_load(CONTROLS_PATH.read_text()) or {}
+
+
 @app.get("/api/config")
 def get_config():
     settings = yaml.safe_load((ROOT / "config" / "settings.yaml").read_text())
     feeds = yaml.safe_load((ROOT / "config" / "feeds.yaml").read_text())
     style_guide = (ROOT / "config" / "style_guide.md").read_text()
-    return {"settings": settings, "feeds": feeds["feeds"], "style_guide": style_guide}
+    return {
+        "settings": settings,
+        "feeds": feeds["feeds"],
+        "style_guide": style_guide,
+        "controls": _load_controls(),
+        "control_options": CONTROL_OPTIONS,
+    }
+
+
+@app.post("/api/config")
+def set_config(body: dict):
+    controls = _load_controls()
+    for group, allowed in CONTROL_OPTIONS.items():
+        for key, value in (body.get(group) or {}).items():
+            if key not in allowed or value not in allowed[key]:
+                raise HTTPException(400, f"invalid {group}.{key} = {value!r}")
+            controls.setdefault(group, {})[key] = value
+    CONTROLS_PATH.write_text(CONTROLS_HEADER + yaml.safe_dump(controls, sort_keys=False))
+    return {"ok": True, "controls": controls}
 
 
 @app.get("/media/{slug}/video")

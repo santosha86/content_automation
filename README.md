@@ -67,14 +67,16 @@ make dashboard        # http://localhost:8420
 - **Generate** — trigger a new video (Scout picks the topic, or type one in), watch the run's log live
 - **Runs** — every video as a card: thumbnail, QA gate result, approval status
 - **Review** — click a card to play the video, read the YouTube/Instagram copy, see the QA checklist gap-by-gap, and Approve/Reject
+- **Config** — auto/manual switch per checkpoint (default: auto) and provider ladder per station
+  (local free → free API credits → paid). Persists to `config/controls.yaml`.
 
 ## Roadmap
 
-See the [Project Scope](https://claude.ai/code/artifact/46a0f7dc-6f98-4ebc-949b-8873beab5591) and [Delivery Plan](https://claude.ai/code/artifact/970c5149-11c0-4847-84f5-37c05b1eaddf) documents for the full picture.
+See the [Project Scope](https://claude.ai/code/artifact/46a0f7dc-6f98-4ebc-949b-8873beab5591) and [Delivery Plan](https://claude.ai/code/artifact/970c5149-11c0-4847-84f5-37c05b1eaddf) documents for the full picture. The Director's contract lives in `config/storyboard.schema.json`; content judgment lives in `.claude/skills/viral-shorts-strategy/`.
 
-- **Phase 0 — done**: repo, environment, config-as-brain
-- **Phase 1 — done**: one-command video → review folder, QA-gated
-- **Phase 1.5 — done**: project docs + this dashboard
-- **Phase 2 — next**: AI avatar station (HeyGen), branded end-card, auto-publish (YouTube Data API + Instagram Graph API)
-- **Phase 3**: cloned voice + avatar, multiple formats, batch weekly production
-- **Phase 4**: analytics loop — Analyst agent (Fable 5) reads YT/IG metrics, rewrites `style_guide.md`, A/B tests hooks
+- **Done**: repo + env + config-as-brain · one-command QA-gated video · dashboard · Config page + provider ladder + storyboard schema + strategy skill
+- **Phase A — next**: Director core — Strategist (Tavily + GitHub trending, top-3), Hook Smith (3 variants), Writer+Critic, storyboard generation, checkpoint plumbing, local-model benchmarks
+- **Phase B**: visual craft — `must_show` b-roll relevance, FLUX local image gen, split-screen/zooms, background music by mood, branded end-card
+- **Phase C**: publisher — YouTube Data API + Instagram Graph API, scheduled daily run
+- **Phase D**: your cloned voice, local-only (Chatterbox, per-emotion reference clips); avatar evaluation
+- **Phase E**: analytics loop — Analyst agent (Fable 5) reads YT/IG metrics, proposes `style_guide.md` edits, A/B tests hooks

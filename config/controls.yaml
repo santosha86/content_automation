@@ -1,0 +1,14 @@
+# Machine-writable control surface — the dashboard Config page reads/writes this file.
+# (settings.yaml stays hand-edited; nothing in the UI touches it.)
+checkpoints:
+  story_pick: auto
+  hook_pick: auto
+  script_approval: auto
+  storyboard_approval: auto
+  publish: manual
+providers:
+  scout: anthropic
+  writer: anthropic
+  reviewer: anthropic
+  voice: kokoro
+  broll: pexels

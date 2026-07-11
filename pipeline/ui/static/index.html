@@ -15,10 +15,16 @@
         <div class="brand-sub">Content factory control panel</div>
       </div>
     </div>
-    <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    <div class="topbar-right">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-view="studio" role="tab" aria-selected="true">Studio</button>
+        <button class="tab" data-view="config" role="tab" aria-selected="false">Config</button>
+      </nav>
+      <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    </div>
   </header>
 
-  <main class="page">
+  <main class="page" id="view-studio">
 
     <section class="generate-panel" id="generate-panel">
       <div class="generate-row">
@@ -53,6 +59,33 @@
         <p>No videos yet. Generate your first one above.</p>
       </div>
     </section>
+
+  </main>
+
+  <main class="page" id="view-config" hidden>
+
+    <section class="config-panel">
+      <div class="section-head">
+        <h2>Checkpoints</h2>
+        <span class="muted">auto = agent decides · manual = pipeline waits for you</span>
+      </div>
+      <p class="config-note">Choice-point stages land with the Director build — switches are stored now and honored as each stage ships. <strong>Publish</strong> stays manual until the Publisher earns your trust.</p>
+      <div class="config-rows" id="checkpoint-rows"></div>
+    </section>
+
+    <section class="config-panel">
+      <div class="section-head">
+        <h2>Providers</h2>
+        <span class="muted">ladder: local free → free API credits → paid API</span>
+      </div>
+      <p class="config-note">Every station runs on the local rung at $0. Paid rungs are per-station quality upgrades, never dependencies.</p>
+      <div class="config-rows" id="provider-rows"></div>
+    </section>
+
+    <div class="config-actions">
+      <button id="config-save" class="btn btn-primary">Save configuration</button>
+      <span class="muted" id="config-saved-note" hidden>Saved ✓</span>
+    </div>
 
   </main>
 

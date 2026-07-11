@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Storyboard — the Director's contract",
+  "description": "One storyboard per video. The Director plans it; Voice, Visuals, Editor and Reviewer execute it beat-by-beat and never invent outside it. This is the 'brain' artifact: every downstream station is replaceable as long as it honors this contract.",
+  "type": "object",
+  "required": ["topic", "hook", "beats", "music", "cta"],
+  "properties": {
+    "topic": {
+      "type": "object",
+      "required": ["title", "source_url", "lane"],
+      "properties": {
+        "title": { "type": "string" },
+        "source_url": { "type": "string" },
+        "lane": { "type": "string", "enum": ["ai_news", "github_trending"], "description": "Content lane the Strategist picked this from." },
+        "name_anchor": { "type": "string", "description": "Famous name/brand the hook is anchored to (Sam Altman, Claude, Google...). Empty if none applies — never force one." }
+      }
+    },
+    "hook": {
+      "type": "object",
+      "required": ["text", "variant_rank"],
+      "properties": {
+        "text": { "type": "string", "description": "4-6 words, kinetic word-by-word buildable, no fabricated events." },
+        "variant_rank": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Which of the 3 generated variants was chosen (by you or by the agent when hook_pick=auto)." },
+        "rationale": { "type": "string" }
+      }
+    },
+    "beats": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 8,
+      "description": "Ordered narrative beats. Target total spoken length 30-40s.",
+      "items": {
+        "type": "object",
+        "required": ["id", "narration", "emotion", "visual", "composition"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "narration": { "type": "string", "description": "Exact voiceover text for this beat." },
+          "emotion": { "type": "string", "enum": ["excited", "curious", "serious", "amazed", "urgent", "confident"], "description": "Drives TTS delivery (speed/tags) and pacing. Never the same emotion twice in a row." },
+          "est_seconds": { "type": "number", "description": "Director's estimate; Editor trues it up from the rendered audio." },
+          "overlay": { "type": "string", "description": "On-screen text chip for this beat, empty for none. Last beat's overlay is the CTA in Hook style (bookend rule B7)." },
+          "visual": {
+            "type": "object",
+            "required": ["source"],
+            "properties": {
+              "source": { "type": "string", "enum": ["broll_video", "broll_image", "generated_image", "face", "screen_capture"], "description": "broll_* = stock (Pexels). generated_image = FLUX local / Gemini ladder. face = presenter cam (clone/avatar later). screen_capture = product UI or repo page." },
+              "query": { "type": "string", "description": "Stock-search query, tightly tied to the narration's concrete subject — not the abstract theme." },
+              "prompt": { "type": "string", "description": "Image-generation prompt when source=generated_image." },
+              "must_show": { "type": "string", "description": "The one thing the frame must contain for the beat to make sense (proof rule B6)." }
+            }
+          },
+          "composition": {
+            "type": "object",
+            "required": ["layout"],
+            "properties": {
+              "layout": { "type": "string", "enum": ["full", "split_face_bottom", "split_face_top", "pip_face"], "description": "split_face_bottom = b-roll top / face bottom (the default split). Max 3 layers total incl. captions (rule B4)." },
+              "camera": { "type": "string", "enum": ["none", "zoom_in", "zoom_out", "punch_in"], "default": "none", "description": "Slow Ken-Burns style move applied by the Editor." },
+              "transition_in": { "type": "string", "enum": ["cut", "flash"], "default": "cut", "description": "flash only at the hook->body cut (rule from creator teardown)." }
+            }
+          }
+        }
+      }
+    },
+    "music": {
+      "type": "object",
+      "required": ["mood"],
+      "properties": {
+        "mood": { "type": "string", "enum": ["driving", "suspense", "uplift", "tech_minimal", "none"], "description": "Director picks from the curated royalty-free library in assets/music/<mood>/." },
+        "duck_under_voice": { "type": "boolean", "default": true }
+      }
+    },
+    "cta": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "description": "3-5 punchy words, rendered as the final beat's overlay in Hook style." },
+        "ask": { "type": "string", "enum": ["follow", "comment", "share", "link"], "default": "follow" }
+      }
+    }
+  }
+}

@@ -69,7 +69,8 @@ Avoid: funding-round news, vague op-eds, incremental benchmark posts.
 Articles:
 {listing}
 
-Reply with JSON: {{"index": <int>, "why": "<one sentence>"}}"""
+Reply with JSON: {{"index": <int>, "why": "<one sentence>"}}""",
+        station="scout",
     )
     chosen = candidates[int(result["index"])]
     chosen["why"] = result.get("why", "")

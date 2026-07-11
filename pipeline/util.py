@@ -19,6 +19,17 @@ def settings() -> dict:
         return yaml.safe_load(f)
 
 
+def controls() -> dict:
+    path = ROOT / "config" / "controls.yaml"
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text()) or {}
+
+
+def station_provider(station: str, default: str) -> str:
+    return controls().get("providers", {}).get(station, default)
+
+
 def style_guide() -> str:
     return (ROOT / "config" / "style_guide.md").read_text()
 
@@ -48,8 +59,13 @@ def media_duration(path: Path) -> float:
     return float(proc.stdout.strip())
 
 
-def llm(prompt: str, system: str = "", max_tokens: int = 8000) -> str:
-    provider = os.getenv("LLM_PROVIDER", "anthropic")
+def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = "") -> str:
+    # Provider ladder: per-station choice from controls.yaml, else env, else anthropic.
+    # Missing keys fall through to the next rung so the pipeline never dead-ends.
+    if station:
+        provider = station_provider(station, os.getenv("LLM_PROVIDER", "anthropic"))
+    else:
+        provider = os.getenv("LLM_PROVIDER", "anthropic")
     if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
         import anthropic
         client = anthropic.Anthropic()
@@ -61,7 +77,23 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000) -> str:
             messages=[{"role": "user", "content": prompt}],
         )
         return "".join(b.text for b in msg.content if b.type == "text")
-    # local fallback
+    if provider == "openrouter" and os.getenv("OPENROUTER_API_KEY"):
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
+            json={
+                "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3.1:free"),
+                "max_tokens": max_tokens,
+                "messages": [
+                    {"role": "system", "content": system or "You are a precise assistant."},
+                    {"role": "user", "content": prompt},
+                ],
+            },
+            timeout=600,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    # local rung
     resp = requests.post(
         "http://localhost:11434/api/chat",
         json={
@@ -78,9 +110,9 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000) -> str:
     return resp.json()["message"]["content"]
 
 
-def llm_json(prompt: str, system: str = "") -> dict | list:
+def llm_json(prompt: str, system: str = "", station: str = "") -> dict | list:
     """Call the LLM and parse a JSON object/array out of the reply."""
-    text = llm(prompt, system)
+    text = llm(prompt, system, station=station)
     match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if match:
         text = match.group(1)

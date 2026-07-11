@@ -7,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-from .util import ROOT, ffmpeg_bin, run_cmd, settings
+from .util import ROOT, ffmpeg_bin, run_cmd, settings, station_provider
 
 MODELS_DIR = ROOT / "assets" / "models"
 _KOKORO = None  # lazy singleton — loading the ONNX model is slow
@@ -117,7 +117,7 @@ def _macos_say(text: str, out_mp3: Path) -> None:
 
 def synthesize(script: dict, run_dir: Path) -> list[Path]:
     """One audio file per segment; returns paths in order."""
-    provider = settings().get("voice", {}).get("provider", "kokoro")
+    provider = station_provider("voice", settings().get("voice", {}).get("provider", "kokoro"))
     if provider == "elevenlabs" and not os.getenv("ELEVENLABS_API_KEY"):
         print("  [voice] provider=elevenlabs but no ELEVENLABS_API_KEY — falling back to kokoro")
         provider = "kokoro"

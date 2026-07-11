@@ -10,7 +10,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from .util import ROOT, ffmpeg_bin, media_duration, run_cmd
+from .util import ROOT, ffmpeg_bin, media_duration, run_cmd, station_provider
 
 FALLBACK_MODEL = "claude-sonnet-5"
 
@@ -77,6 +77,9 @@ def _parse_caption_cues(subs: Path) -> list[dict]:
 
 
 def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str) -> dict | None:
+    if station_provider("reviewer", "anthropic") == "skip":
+        print("  [reviewer] provider=skip — QA gate disabled in config")
+        return None
     if not os.getenv("ANTHROPIC_API_KEY"):
         print("  [reviewer] no ANTHROPIC_API_KEY — skipping QA gate")
         return None

@@ -262,6 +262,125 @@ async function setStatus(slug, status) {
   loadRuns();
 }
 
+// ---------- view tabs ----------
+const views = { studio: $("#view-studio"), config: $("#view-config") };
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => {
+      const active = t === tab;
+      t.classList.toggle("active", active);
+      t.setAttribute("aria-selected", String(active));
+    });
+    Object.entries(views).forEach(([name, el]) => { el.hidden = name !== tab.dataset.view; });
+    if (tab.dataset.view === "config") loadConfig();
+  });
+});
+
+// ---------- config page ----------
+const CHECKPOINT_LABELS = {
+  story_pick: ["Story pick", "Strategist's top-3 stories → which one to make"],
+  hook_pick: ["Hook pick", "3 hook variants → which one leads"],
+  script_approval: ["Script approval", "Writer + Critic sign-off before voicing"],
+  storyboard_approval: ["Storyboard approval", "Director's beat plan before rendering"],
+  publish: ["Publish", "Post the finished video to YouTube / Instagram"],
+};
+const PROVIDER_LABELS = {
+  scout: ["Scout / Strategist", "story ranking"],
+  writer: ["Writer", "script + hooks"],
+  reviewer: ["Reviewer", "vision QA gate"],
+  voice: ["Voice", "narration TTS"],
+  broll: ["B-roll", "visual sourcing"],
+};
+const PROVIDER_OPTION_LABELS = {
+  ollama: "Ollama — local, free",
+  openrouter: "OpenRouter — free API credits",
+  anthropic: "Claude — paid API",
+  skip: "Skip — no QA gate",
+  kokoro: "Kokoro — local, free",
+  elevenlabs: "ElevenLabs — paid API",
+  say: "macOS say — local fallback",
+  pexels: "Pexels — free stock",
+};
+
+let _configState = null;
+
+function checkpointRow(key, value) {
+  const [label, desc] = CHECKPOINT_LABELS[key] || [key, ""];
+  const row = document.createElement("div");
+  row.className = "config-row";
+  row.innerHTML = `
+    <div class="config-row-text">
+      <div class="config-row-label">${escapeHtml(label)}</div>
+      <div class="config-row-desc">${escapeHtml(desc)}</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" data-group="checkpoints" data-key="${key}" ${value === "auto" ? "checked" : ""}>
+      <span class="switch-track"></span>
+      <span class="switch-label">${value === "auto" ? "Auto" : "Manual"}</span>
+    </label>
+  `;
+  row.querySelector("input").addEventListener("change", (e) => {
+    row.querySelector(".switch-label").textContent = e.target.checked ? "Auto" : "Manual";
+  });
+  return row;
+}
+
+function providerRow(key, value, options) {
+  const [label, desc] = PROVIDER_LABELS[key] || [key, ""];
+  const row = document.createElement("div");
+  row.className = "config-row";
+  row.innerHTML = `
+    <div class="config-row-text">
+      <div class="config-row-label">${escapeHtml(label)}</div>
+      <div class="config-row-desc">${escapeHtml(desc)}</div>
+    </div>
+    <select data-group="providers" data-key="${key}">
+      ${options.map((o) => `<option value="${o}" ${o === value ? "selected" : ""}>${escapeHtml(PROVIDER_OPTION_LABELS[o] || o)}</option>`).join("")}
+    </select>
+  `;
+  return row;
+}
+
+async function loadConfig() {
+  const res = await fetch("/api/config");
+  const data = await res.json();
+  _configState = data;
+  const controls = data.controls || {};
+  const options = data.control_options || {};
+
+  const cpRows = $("#checkpoint-rows");
+  cpRows.innerHTML = "";
+  Object.keys(options.checkpoints || {}).forEach((key) => {
+    cpRows.appendChild(checkpointRow(key, (controls.checkpoints || {})[key] || "auto"));
+  });
+
+  const pvRows = $("#provider-rows");
+  pvRows.innerHTML = "";
+  Object.entries(options.providers || {}).forEach(([key, opts]) => {
+    pvRows.appendChild(providerRow(key, (controls.providers || {})[key] || opts[0], opts));
+  });
+}
+
+async function saveConfig() {
+  const body = { checkpoints: {}, providers: {} };
+  document.querySelectorAll('#checkpoint-rows input[type="checkbox"]').forEach((el) => {
+    body.checkpoints[el.dataset.key] = el.checked ? "auto" : "manual";
+  });
+  document.querySelectorAll("#provider-rows select").forEach((el) => {
+    body.providers[el.dataset.key] = el.value;
+  });
+  const res = await fetch("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const note = $("#config-saved-note");
+  note.textContent = res.ok ? "Saved ✓" : "Save failed";
+  note.hidden = false;
+  setTimeout(() => { note.hidden = true; }, 2500);
+}
+$("#config-save").addEventListener("click", saveConfig);
+
 // ---------- init ----------
 loadRuns();
 resumeAnyJob();
