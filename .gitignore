@@ -1,4 +1,13 @@
+# Secrets — never commit. Only .env.example (placeholders) is tracked.
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.*
+credentials.json
+client_secret*.json
+token.json
 .venv/
 __pycache__/
 assets/models/
