@@ -475,9 +475,53 @@ async function scheduleSocial(btn) {
 // ---------- analytics ----------
 function fmtNum(n) { return !n ? "0" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n); }
 
+const TARGET_LABEL = { style_guide: "Style guide", hook_formulas: "Hook formulas",
+  virality_rubric: "Virality rubric", director_realism: "Director realism", scouting: "Scouting" };
+
+function renderInsights(r) {
+  const body = $("#insights-body"), meta = $("#insights-meta");
+  if (!r || r.exists === false) { body.innerHTML = `<div class="muted">No insights yet — click Generate.</div>`; return; }
+  meta.textContent = `— ${r.videos_analyzed || 0} videos · ${r.data_source === "live" ? "live data" : "sample data (illustrative)"}${r.generated_on ? " · " + r.generated_on : ""}`;
+  const patterns = (r.winning_patterns || []).map((p) => `<li>${escapeHtml(p)}</li>`).join("");
+  const gaps = (r.recurring_qa_gaps || []).map((g) =>
+    `<li><span class="chip chip-warn">${escapeHtml(g.gate)} ×${g.count}</span> ${escapeHtml(g.fix || "")}</li>`).join("");
+  const props = (r.proposals || []).map((p) => {
+    const cc = p.confidence === "high" ? "chip-good" : p.confidence === "low" ? "chip-warn" : "";
+    return `<div class="proposal">
+      <div class="proposal-head"><span class="chip">${escapeHtml(TARGET_LABEL[p.target] || p.target)}</span>
+        <span class="chip ${cc}">${escapeHtml(p.confidence || "")}</span></div>
+      <div class="proposal-change">${escapeHtml(p.change || "")}</div>
+      <div class="proposal-why muted">${escapeHtml(p.rationale || "")}</div></div>`;
+  }).join("");
+  body.innerHTML = `
+    <div class="insight-headline">${escapeHtml(r.headline || "")}</div>
+    ${r.calibration ? `<div class="insight-cal"><strong>Calibration:</strong> ${escapeHtml(r.calibration)}</div>` : ""}
+    <div class="insight-grid">
+      <div class="insight-col"><h5>Winning patterns</h5><ul>${patterns || "<li class='muted'>—</li>"}</ul></div>
+      <div class="insight-col"><h5>Recurring QA gaps</h5><ul>${gaps || "<li class='muted'>—</li>"}</ul></div>
+    </div>
+    ${r.cost_note ? `<div class="insight-cal"><strong>Cost:</strong> ${escapeHtml(r.cost_note)}</div>` : ""}
+    <h5 class="proposals-title">Proposed brain edits (review before applying)</h5>
+    <div class="proposals">${props || "<div class='muted'>No proposals.</div>"}</div>`;
+}
+
+async function loadInsights() {
+  try { renderInsights(await (await fetch("/api/analyst")).json()); }
+  catch { $("#insights-body").innerHTML = `<div class="muted">Failed to load insights.</div>`; }
+}
+async function runInsights() {
+  const btn = $("#insights-run"), body = $("#insights-body");
+  btn.disabled = true; btn.textContent = "Analyzing…";
+  body.innerHTML = `<div class="muted">Reading performance across all videos and correlating…</div>`;
+  try { renderInsights(await (await fetch("/api/analyst/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json()); }
+  catch { body.innerHTML = `<div class="muted">Analysis failed.</div>`; }
+  btn.disabled = false; btn.textContent = "Regenerate insights";
+}
+
 async function loadAnalytics() {
   const tiles = $("#analytics-tiles"), rows = $("#analytics-rows"), empty = $("#analytics-empty");
   const banner = $("#analytics-banner"), src = $("#analytics-source");
+  loadInsights();
   tiles.innerHTML = ""; rows.innerHTML = "";
   let d;
   try { d = await (await fetch("/api/analytics")).json(); }
@@ -786,4 +830,6 @@ document.addEventListener("DOMContentLoaded", () => {
 {
   const sg = $("#social-generate");
   if (sg) sg.addEventListener("click", generateSocial);
+  const ir = $("#insights-run");
+  if (ir) ir.addEventListener("click", runInsights);
 }

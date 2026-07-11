@@ -133,6 +133,13 @@
         Showing <strong>sample data</strong>. Set <code>ANALYTICS_LIVE=1</code> + platform tokens and fill
         <code>analytics._fetch_live()</code> to bridge real YouTube/Instagram numbers — the table stays identical.
       </div>
+      <div class="insights-panel">
+        <div class="insights-head">
+          <div><strong>Analyst insights</strong> <span class="muted" id="insights-meta">— learning loop: prediction vs reality, patterns, and proposed brain edits</span></div>
+          <button class="btn btn-ghost" id="insights-run">Generate insights</button>
+        </div>
+        <div id="insights-body"></div>
+      </div>
       <div class="usage-tiles" id="analytics-tiles"></div>
       <div class="usage-table-wrap">
         <table class="usage-table" id="analytics-table">

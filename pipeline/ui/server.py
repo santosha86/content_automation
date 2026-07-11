@@ -319,6 +319,22 @@ def publish_status():
     return publisher.status()
 
 
+@app.get("/api/analyst")
+def analyst_latest():
+    """The most recent insights report, or {exists:false} if none generated yet."""
+    from .. import analyst
+    rep = analyst.latest()
+    return rep if rep else {"exists": False}
+
+
+@app.post("/api/analyst/run")
+def analyst_run(body: dict = None):
+    """Generate a fresh insights report (LLM analysis over all rendered videos)."""
+    from .. import analyst
+    platform = (body or {}).get("platform", "youtube")
+    return analyst.run(platform)
+
+
 @app.post("/api/publish/{slug}")
 def publish_run(slug: str, body: dict = None):
     """Publish (or dry-run) a finished video. live=true only posts if creds + PUBLISH_LIVE."""
