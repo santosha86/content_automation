@@ -3,7 +3,7 @@
   "title": "Storyboard — the Director's contract",
   "description": "One storyboard per video. The Director plans it; Voice, Visuals, Editor and Reviewer execute it beat-by-beat and never invent outside it. This is the 'brain' artifact: every downstream station is replaceable as long as it honors this contract.",
   "type": "object",
-  "required": ["topic", "hook", "beats", "music", "cta"],
+  "required": ["topic", "concept", "hook", "beats", "music", "cta"],
   "properties": {
     "topic": {
       "type": "object",
@@ -12,13 +12,27 @@
         "title": { "type": "string" },
         "source_url": { "type": "string" },
         "lane": { "type": "string", "enum": ["ai_news", "github_trending"], "description": "Content lane the Strategist picked this from." },
-        "name_anchor": { "type": "string", "description": "Famous name/brand the hook is anchored to (Sam Altman, Claude, Google...). Empty if none applies — never force one." }
+        "name_anchor": { "type": "string", "description": "Famous name/brand the hook is anchored to (Sam Altman, Claude, Google...). Empty if none applies — never force one." },
+        "framing_notes": { "type": "string", "description": "How claims must be framed (e.g. 'reported consideration, not enacted policy'). Critic and Reviewer check the script against this." },
+        "sources": { "type": "array", "items": { "type": "string" }, "description": "URLs every factual claim traces to." }
+      }
+    },
+    "concept": {
+      "type": "object",
+      "required": ["metaphor", "escalation"],
+      "description": "The visual through-line. Every beat's visual must serve it — one authored idea, not a slideshow of related clips.",
+      "properties": {
+        "metaphor": { "type": "string", "description": "One continuous visual idea carrying the video (e.g. 'a cat performing at a grand piano as the hall turns digital')." },
+        "escalation": { "type": "string", "description": "How the imagery evolves across beats in parallel with the narration's stakes (playful -> ominous, small -> global...)." },
+        "continuity": { "type": "string", "description": "Exact recurring character/object/style description prepended verbatim to every generated-image prompt so identity stays consistent across shots." },
+        "negative_prompt": { "type": "string", "description": "Global negative prompt for all generated images (deformed anatomy, inconsistent identity, embedded text, logos, watermarks...)." }
       }
     },
     "hook": {
       "type": "object",
       "required": ["text", "variant_rank"],
       "properties": {
+        "type": { "type": "string", "enum": ["kinetic_text", "visual_spectacle"], "default": "kinetic_text", "description": "kinetic_text = word-by-word text hook. visual_spectacle = the concept's imagery is the scroll-stopper; text stays minimal." },
         "text": { "type": "string", "description": "4-6 words, kinetic word-by-word buildable, no fabricated events." },
         "variant_rank": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Which of the 3 generated variants was chosen (by you or by the agent when hook_pick=auto)." },
         "rationale": { "type": "string" }
@@ -37,6 +51,7 @@
           "narration": { "type": "string", "description": "Exact voiceover text for this beat." },
           "emotion": { "type": "string", "enum": ["excited", "curious", "serious", "amazed", "urgent", "confident"], "description": "Drives TTS delivery (speed/tags) and pacing. Never the same emotion twice in a row." },
           "est_seconds": { "type": "number", "description": "Director's estimate; Editor trues it up from the rendered audio." },
+          "music_intensity": { "type": "integer", "minimum": 0, "maximum": 3, "description": "Music arc per beat: 0 = bed only, 3 = peak. Should rise with the narration's stakes, not sit flat." },
           "overlay": { "type": "string", "description": "On-screen text chip for this beat, empty for none. Last beat's overlay is the CTA in Hook style (bookend rule B7)." },
           "visual": {
             "type": "object",
@@ -65,7 +80,8 @@
       "required": ["mood"],
       "properties": {
         "mood": { "type": "string", "enum": ["driving", "suspense", "uplift", "tech_minimal", "none"], "description": "Director picks from the curated royalty-free library in assets/music/<mood>/." },
-        "duck_under_voice": { "type": "boolean", "default": true }
+        "duck_under_voice": { "type": "boolean", "default": true, "description": "Loudness targets: narration ~-6dB peak, music -22 to -16dB under voice." },
+        "end_with_silence": { "type": "boolean", "default": true, "description": "Music stops on the final word; ~1s of silence so the CTA/question lands." }
       }
     },
     "cta": {
