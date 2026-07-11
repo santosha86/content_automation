@@ -13,7 +13,16 @@ video:
 video-topic:
 	$(PYTHON) -m pipeline.run --topic "$(TOPIC)"
 
+plan:
+	$(PYTHON) -m pipeline.plan
+
+plan-topic:
+	$(PYTHON) -m pipeline.plan --topic "$(TOPIC)"
+
+eval:
+	$(PYTHON) -m pipeline.evalharness
+
 dashboard:
 	$(PYTHON) -m uvicorn pipeline.ui.server:app --port 8420 --reload
 
-.PHONY: setup video video-topic dashboard
+.PHONY: setup video video-topic plan plan-topic eval dashboard

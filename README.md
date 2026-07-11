@@ -75,7 +75,7 @@ make dashboard        # http://localhost:8420
 See the [Project Scope](https://claude.ai/code/artifact/46a0f7dc-6f98-4ebc-949b-8873beab5591) and [Delivery Plan](https://claude.ai/code/artifact/970c5149-11c0-4847-84f5-37c05b1eaddf) documents for the full picture. The Director's contract lives in `config/storyboard.schema.json`; content judgment lives in `.claude/skills/viral-shorts-strategy/`.
 
 - **Done**: repo + env + config-as-brain · one-command QA-gated video · dashboard · Config page + provider ladder + storyboard schema + strategy skill
-- **Phase A — next**: Director core — Strategist (Tavily + GitHub trending, top-3), Hook Smith (3 variants), Writer+Critic, storyboard generation, checkpoint plumbing, local-model benchmarks
+- **Done — Phase A (Director core)**: Strategist (GitHub-trending + ai_news lanes, top-3 ranked; Tavily pending a key) · Hook Smith (3 distinct-formula variants) · Writer+Critic loop (graded against the retention structure) · Director (storyboard validated against the schema, retry-until-valid) · checkpoint pause/resume plumbing + dashboard choice UI · eval-harness stub (ollama vs anthropic per station, blind A/B pick). Run `make plan` for a storyboard, `make eval` for a benchmark; `make video` still renders the full clip. Wiring the storyboard into voice/visuals/editor is Phase B.
 - **Phase B**: visual craft — `must_show` b-roll relevance, FLUX local image gen, split-screen/zooms, background music by mood, branded end-card
 - **Phase C**: publisher — YouTube Data API + Instagram Graph API, scheduled daily run
 - **Phase D**: your cloned voice, local-only (Chatterbox, per-emotion reference clips); avatar evaluation
