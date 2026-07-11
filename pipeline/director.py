@@ -97,14 +97,19 @@ read like a real photograph of an ordinary scene:
     close-up hands — those carry the worst AI tells (bad fingers, uncanny eyes). A laptop on
     a desk beats a person's face; a screen beats a portrait.
 
-A/B ROUTING — prefer REAL PROOF over generation when it exists:
-  - If a beat references something with a real, screenshottable web page — a GitHub repo, a
-    product/company site, a benchmark chart, a launch blog post, a news article — set that
-    shot's source to "screen_capture" and put the exact URL in its `query`. A real screenshot
-    of the actual thing is always more credible than any generated frame. Use the TOPIC
-    source_url ({scaffold['topic']['source_url'] or '(none)'}) when the beat is about the announcement itself.
-  - Only fall back to "generated_image" (a realistic photo, per the rules above) for abstract
-    beats where no real artifact can be shown — a feeling, a metaphor, a generic action.
+A/B ROUTING — prefer REAL PROOF over generation, but ONLY from cleanly-screenshottable pages:
+  - GOOD screen_capture targets (open, no paywall, no bot-wall): GitHub repos, product/docs
+    landing pages, a company's own launch blog post, pricing pages, changelogs, model cards
+    on huggingface. For these, set the shot's source to "screen_capture" and put the exact
+    URL in its `query`. A screenshot of the actual thing beats any generated frame.
+  - DO NOT screen_capture news aggregators or paywalled/bot-protected sites (businessinsider,
+    nytimes, bloomberg, wsj, theinformation, medium, most openai.com pages behind Cloudflare)
+    — they return a paywall or a "Verifying you are human" page, not the content. If the beat
+    is about a company's announcement, screen_capture the COMPANY's OWN page (e.g. the vendor's
+    product/blog URL), not the news article. If no clean official page exists, use a realistic
+    generated_image instead. The TOPIC source_url is {scaffold['topic']['source_url'] or '(none)'} — only reuse it if it is an official/open page, not a news site.
+  - Use "generated_image" (a realistic photo, per the rules above) for abstract beats and
+    whenever the only source is a paywalled/bot-walled page.
   - Use "broll_video" for generic motion (typing, city, servers) that stock footage covers.
 
 CRUCIAL — cut with the words: split each beat's narration into 1-3 short PHRASES and give

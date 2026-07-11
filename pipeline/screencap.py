@@ -43,27 +43,56 @@ def is_url(s: str) -> bool:
     return bool(s and _URL_RE.match(s.strip()))
 
 
+# A realistic desktop UA cuts down (not eliminates) bot challenges on protected sites.
+_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
+
+
+def _looks_blank(png: Path) -> bool:
+    """True if the shot is near-uniform — a Cloudflare 'Verifying...' interstitial, a
+    cookie/consent wall, or a blank error page (mostly one background color). Those are
+    worse than a fallback still, so reject them."""
+    try:
+        from PIL import Image
+        im = Image.open(png).convert("RGB").resize((64, 114))
+        px = list(im.getdata())
+        # modal-ish color: quantize to buckets, find the dominant bucket's share
+        from collections import Counter
+        buckets = Counter((r // 24, g // 24, b // 24) for r, g, b in px)
+        dominant = buckets.most_common(1)[0][1] / len(px)
+        return dominant > 0.90
+    except Exception:
+        return False  # if PIL/analysis fails, don't block a usable screenshot
+
+
 def capture(url: str, out_png: Path, width: int = 1080, height: int = 1920) -> Path | None:
-    """Screenshot `url` into a portrait PNG, or None if not a URL / browser missing / fails."""
+    """Screenshot `url` into a portrait PNG, or None if not a URL / browser missing /
+    fails / the page is a bot-challenge or blank wall (caller then falls back)."""
     url = (url or "").strip()
     if not is_url(url) or not _available():
         return None
     args = [
         _chrome_bin(), "--headless=new", "--disable-gpu", "--hide-scrollbars",
-        "--no-sandbox", "--force-device-scale-factor=1",
+        "--no-sandbox", "--force-device-scale-factor=1", f"--user-agent={_UA}",
         f"--window-size={width},{height}",
-        "--virtual-time-budget=8000",  # let the page's JS/render settle before the shot
+        "--virtual-time-budget=6000",  # let the page's JS/render settle before the shot
         f"--screenshot={out_png}", url,
     ]
     try:
-        proc = subprocess.run(args, capture_output=True, text=True, timeout=60)
+        # 30s hard cap: paywalled/heavy-JS pages that never finish loading fail fast to
+        # the fallback instead of stalling the whole render.
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=30)
     except (subprocess.TimeoutExpired, OSError) as e:
-        print(f"  [screencap] failed for {url}: {e}")
+        print(f"  [screencap] failed for {url}: {str(e)[:100]}")
         return None
-    if out_png.exists() and out_png.stat().st_size > 5000:  # >5KB = a real render, not a blank/error page
-        return out_png
-    print(f"  [screencap] no usable screenshot for {url} (rc={proc.returncode})")
-    return None
+    if not (out_png.exists() and out_png.stat().st_size > 5000):
+        print(f"  [screencap] no usable screenshot for {url} (rc={proc.returncode})")
+        return None
+    if _looks_blank(out_png):
+        print(f"  [screencap] {url} looked like a bot-challenge/blank wall — rejecting")
+        out_png.unlink(missing_ok=True)
+        return None
+    return out_png
 
 
 def status() -> str:

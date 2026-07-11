@@ -57,6 +57,19 @@ def _still_to_clip(img: Path, seconds: float, out: Path) -> None:
              "-vf", fit, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)])
 
 
+def _realistic_shot_from(shot: dict) -> dict:
+    """Build a generated_image shot (realistic photo) from a shot whose primary source
+    (a screenshot) was unavailable — so a proof beat degrades to a believable still, not
+    generic stock. Reuses the adapter's realism prefix + baseline negatives."""
+    from .storyboard_adapter import _realism_prompt, _merge_neg
+    subject = (shot.get("must_show") or shot.get("phrase") or "").strip() or "a modern software workspace"
+    return {
+        "source": "generated_image",
+        "prompt": _realism_prompt(f"a real photo showing {subject}"),
+        "negative_prompt": _merge_neg(""),
+    }
+
+
 def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: bool, story_seed: str = "") -> None:
     """Fetch one clip for a shot: screenshot -> FLUX still -> Pexels stock -> gradient."""
     # Type-A "real proof": screenshot the actual page the Director pointed at.
@@ -66,7 +79,14 @@ def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: boo
         if img:
             _still_to_clip(img, seconds, out)
             return
-        print(f"  [visuals] screen_capture missed ('{shot_url}') — falling back")
+        print(f"  [visuals] screen_capture missed ('{shot_url}') — trying realistic still")
+        # A missed proof shot must NOT drop to generic abstract stock (the "looks generic"
+        # failure). Synthesize a realistic FLUX still from what the shot needed to show.
+        fallback = _realistic_shot_from(shot)
+        img = imagegen.generate(fallback, out.with_suffix(".png"), story_seed=story_seed)
+        if img:
+            _still_to_clip(img, seconds, out)
+            return
     if shot.get("source") == "generated_image":
         img = imagegen.generate(shot, out.with_suffix(".png"), story_seed=story_seed)
         if img:
