@@ -96,6 +96,11 @@ read like a real photograph of an ordinary scene:
   - Bias toward SCENES and OBJECTS and over-the-shoulder framing. AVOID close-up faces and
     close-up hands — those carry the worst AI tells (bad fingers, uncanny eyes). A laptop on
     a desk beats a person's face; a screen beats a portrait.
+  - NEVER put readable text on a screen or paper in a generated_image — the model renders it
+    as gibberish, the #1 giveaway. If a screen/document is in frame, describe it as OUT OF
+    FOCUS, showing a simple chart/graph, a blurred UI, or angled away — never "a screen
+    showing a notice/article/message/paragraph". When you need to show real on-screen text
+    (a notice, a headline, a repo), that's a screen_capture shot of a real page, not FLUX.
 
 A/B ROUTING — prefer REAL PROOF over generation, but ONLY from cleanly-screenshottable pages:
   - GOOD screen_capture targets (open, no paywall, no bot-wall): GitHub repos, product/docs

@@ -21,7 +21,8 @@ from .util import llm_json, style_guide
 _REALISM_PREFIX = "Photorealistic candid photo, natural light, real-world documentary look,"
 _BASELINE_NEG = ("glowing, holographic, neon, cinematic teal and orange, 3d render, cgi, "
                  "digital art, illustration, concept art, surreal, deformed hands, extra "
-                 "fingers, embedded text, watermark, logo, oversaturated, plastic skin")
+                 "fingers, embedded text, gibberish text, garbled text, unreadable writing, "
+                 "text on screen, watermark, logo, oversaturated, plastic skin")
 
 
 def _realism_prompt(prompt: str) -> str:
