@@ -34,6 +34,17 @@ def style_guide() -> str:
     return (ROOT / "config" / "style_guide.md").read_text()
 
 
+def strategy_skill() -> str:
+    """The viral-shorts-strategy skill — house judgment injected into Director prompts."""
+    path = ROOT / ".claude" / "skills" / "viral-shorts-strategy" / "SKILL.md"
+    return path.read_text() if path.exists() else ""
+
+
+def checkpoint_mode(name: str, default: str = "auto") -> str:
+    """auto | manual for a pipeline checkpoint, read from controls.yaml."""
+    return controls().get("checkpoints", {}).get(name, default)
+
+
 def ffmpeg_bin(tool: str = "ffmpeg") -> str:
     found = shutil.which(tool)
     if found:
@@ -59,18 +70,22 @@ def media_duration(path: Path) -> float:
     return float(proc.stdout.strip())
 
 
-def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = "") -> str:
+def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = "",
+        provider: str = "", model: str = "") -> str:
     # Provider ladder: per-station choice from controls.yaml, else env, else anthropic.
     # Missing keys fall through to the next rung so the pipeline never dead-ends.
-    if station:
-        provider = station_provider(station, os.getenv("LLM_PROVIDER", "anthropic"))
-    else:
-        provider = os.getenv("LLM_PROVIDER", "anthropic")
+    # `provider`/`model` force a specific rung — the eval harness uses this to
+    # benchmark the same station across ollama vs anthropic.
+    if not provider:
+        if station:
+            provider = station_provider(station, os.getenv("LLM_PROVIDER", "anthropic"))
+        else:
+            provider = os.getenv("LLM_PROVIDER", "anthropic")
     if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
         import anthropic
         client = anthropic.Anthropic()
         msg = client.messages.create(
-            model=os.getenv("LLM_MODEL", "claude-sonnet-5"),
+            model=model or os.getenv("LLM_MODEL", "claude-sonnet-5"),
             max_tokens=max_tokens,
             system=system or "You are a precise assistant.",
             output_config={"effort": "medium"},
@@ -82,7 +97,7 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = ""
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
             json={
-                "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3.1:free"),
+                "model": model or os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3.1:free"),
                 "max_tokens": max_tokens,
                 "messages": [
                     {"role": "system", "content": system or "You are a precise assistant."},
@@ -93,11 +108,11 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = ""
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
-    # local rung
+    # local rung (ollama)
     resp = requests.post(
         "http://localhost:11434/api/chat",
         json={
-            "model": os.getenv("OLLAMA_MODEL", "gpt-oss"),
+            "model": model or os.getenv("OLLAMA_MODEL", "gpt-oss"),
             "messages": [
                 {"role": "system", "content": system or "You are a precise assistant."},
                 {"role": "user", "content": prompt},
@@ -110,9 +125,10 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = ""
     return resp.json()["message"]["content"]
 
 
-def llm_json(prompt: str, system: str = "", station: str = "") -> dict | list:
+def llm_json(prompt: str, system: str = "", station: str = "",
+             provider: str = "", model: str = "") -> dict | list:
     """Call the LLM and parse a JSON object/array out of the reply."""
-    text = llm(prompt, system, station=station)
+    text = llm(prompt, system, station=station, provider=provider, model=model)
     match = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if match:
         text = match.group(1)
