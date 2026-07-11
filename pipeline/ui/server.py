@@ -159,7 +159,7 @@ CONTROL_OPTIONS = {
     "providers": {
         "scout": ["ollama", "openrouter", "anthropic"],
         "writer": ["ollama", "openrouter", "anthropic"],
-        "reviewer": ["anthropic", "skip"],
+        "reviewer": ["openrouter", "anthropic", "skip"],
         "voice": ["kokoro", "elevenlabs", "say"],
         "broll": ["pexels"],
     },

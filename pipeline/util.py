@@ -70,17 +70,43 @@ def media_duration(path: Path) -> float:
     return float(proc.stdout.strip())
 
 
+def _openrouter_headers() -> dict:
+    """Auth + the optional attribution headers OpenRouter recommends (rankings/limits)."""
+    h = {"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"}
+    ref = os.getenv("OPENROUTER_REFERER", "https://github.com/local/content-automation")
+    title = os.getenv("OPENROUTER_TITLE", "content-automation")
+    if ref:
+        h["HTTP-Referer"] = ref
+    if title:
+        h["X-Title"] = title
+    return h
+
+
+def _effective_provider(provider: str) -> str:
+    """Degrade to a provider whose key is actually present, so flipping a station to
+    'openrouter' before you've added OPENROUTER_API_KEY keeps working on your existing
+    Anthropic key, and everything falls back to local ollama as the last free rung."""
+    has_or = bool(os.getenv("OPENROUTER_API_KEY"))
+    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    if provider == "openrouter" and not has_or:
+        return "anthropic" if has_anthropic else "ollama"
+    if provider == "anthropic" and not has_anthropic:
+        return "openrouter" if has_or else "ollama"
+    return provider
+
+
 def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = "",
         provider: str = "", model: str = "") -> str:
     # Provider ladder: per-station choice from controls.yaml, else env, else anthropic.
-    # Missing keys fall through to the next rung so the pipeline never dead-ends.
-    # `provider`/`model` force a specific rung — the eval harness uses this to
-    # benchmark the same station across ollama vs anthropic.
+    # Missing keys degrade to a provider that has one (see _effective_provider) so the
+    # pipeline never dead-ends. `provider`/`model` force a specific rung — the eval
+    # harness uses this to benchmark the same station across providers.
     if not provider:
         if station:
-            provider = station_provider(station, os.getenv("LLM_PROVIDER", "anthropic"))
+            provider = station_provider(station, os.getenv("LLM_PROVIDER", "openrouter"))
         else:
-            provider = os.getenv("LLM_PROVIDER", "anthropic")
+            provider = os.getenv("LLM_PROVIDER", "openrouter")
+    provider = _effective_provider(provider)
     if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
         import anthropic
         client = anthropic.Anthropic()
@@ -95,9 +121,9 @@ def llm(prompt: str, system: str = "", max_tokens: int = 8000, station: str = ""
     if provider == "openrouter" and os.getenv("OPENROUTER_API_KEY"):
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
+            headers=_openrouter_headers(),
             json={
-                "model": model or os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3.1:free"),
+                "model": model or os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5"),
                 "max_tokens": max_tokens,
                 "messages": [
                     {"role": "system", "content": system or "You are a precise assistant."},

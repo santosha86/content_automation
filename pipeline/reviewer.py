@@ -10,7 +10,10 @@ import re
 import subprocess
 from pathlib import Path
 
-from .util import ROOT, ffmpeg_bin, media_duration, run_cmd, station_provider
+import requests
+
+from .util import (ROOT, ffmpeg_bin, media_duration, run_cmd, station_provider,
+                   _effective_provider, _openrouter_headers)
 
 FALLBACK_MODEL = "claude-sonnet-5"
 
@@ -76,14 +79,46 @@ def _parse_caption_cues(subs: Path) -> list[dict]:
     return cues
 
 
+def _grade_openrouter(system: str, frames: list, payload_text: str) -> dict | None:
+    """Vision grade via OpenRouter (OpenAI-style image_url blocks) so the whole pipeline
+    can run on a single OpenRouter recharge. Returns None to let the caller fall back."""
+    user_content = []
+    for label, frame in frames:
+        b64 = base64.b64encode(frame.read_bytes()).decode()
+        user_content.append({"type": "text", "text": f"keyframe: {label}"})
+        user_content.append({"type": "image_url",
+                             "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+    user_content.append({"type": "text", "text": payload_text})
+    model = os.getenv("OPENROUTER_VISION_MODEL", "anthropic/claude-sonnet-4.5")
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=_openrouter_headers(),
+            json={"model": model, "max_tokens": 4096,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": user_content}]},
+            timeout=600,
+        )
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"]
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        return json.loads(m.group(0))
+    except Exception as e:
+        print(f"  [reviewer] openrouter vision failed: {str(e)[:160]}")
+        return None
+
+
 def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str) -> dict | None:
-    if station_provider("reviewer", "anthropic") == "skip":
+    provider = station_provider("reviewer", os.getenv("LLM_PROVIDER", "openrouter"))
+    if provider == "skip":
         print("  [reviewer] provider=skip — QA gate disabled in config")
         return None
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        print("  [reviewer] no ANTHROPIC_API_KEY — skipping QA gate")
+    provider = _effective_provider(provider)
+    if provider == "openrouter" and not os.getenv("OPENROUTER_API_KEY"):
+        provider = "anthropic"  # _effective_provider already tried; be explicit for vision
+    if provider != "openrouter" and not os.getenv("ANTHROPIC_API_KEY"):
+        print("  [reviewer] no vision-capable key (OPENROUTER_API_KEY / ANTHROPIC_API_KEY) — skipping QA gate")
         return None
-    import anthropic
 
     checklist = json.loads((ROOT / "checklist.schema.json").read_text())
     gate_b = [i for i in checklist["gates"]["gate_b_pre_publish"] if i["auto_checkable"]]
@@ -103,34 +138,42 @@ def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str)
             "note": "Pipeline renders a branded end-card in the last ~2s (grade B8 on the final frames). The brief silence UNDER that end-card is the intentional end_with_silence bookend (music bed arrives later) — grade B5 only for dead-air gaps WITHIN the narration, not the trailing end-card. Face-cam layout still arrives later — grade B4 factually.",
         },
     }
-    content = []
-    for label, frame in _keyframes(video, run_dir):
-        content.append({"type": "text", "text": f"keyframe: {label}"})
-        content.append({
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/jpeg",
-                       "data": base64.b64encode(frame.read_bytes()).decode()},
-        })
-    content.append({"type": "text", "text": json.dumps(payload, indent=1)})
-
-    client = anthropic.Anthropic()
-    model = os.getenv("REVIEWER_MODEL", os.getenv("LLM_MODEL", FALLBACK_MODEL))
+    frames = _keyframes(video, run_dir)
+    payload_text = json.dumps(payload, indent=1)
     report = None
-    for attempt_model in [model, FALLBACK_MODEL]:
-        try:
-            msg = client.messages.create(
-                model=attempt_model, max_tokens=4096, system=system,
-                output_config={"effort": "low"},
-                messages=[{"role": "user", "content": content}],
-            )
-            if msg.stop_reason == "refusal":
-                continue  # refusal -> fall back to next model per reviewer prompt
-            text = "".join(b.text for b in msg.content if b.type == "text")
-            m = re.search(r"\{.*\}", text, re.DOTALL)
-            report = json.loads(m.group(0))
-            break
-        except Exception as e:
-            print(f"  [reviewer] {attempt_model} failed: {e}")
+
+    if provider == "openrouter":
+        report = _grade_openrouter(system, frames, payload_text)
+
+    # Anthropic path (primary when reviewer=anthropic, or fallback if OpenRouter vision failed).
+    if report is None and os.getenv("ANTHROPIC_API_KEY"):
+        import anthropic
+        content = []
+        for label, frame in frames:
+            content.append({"type": "text", "text": f"keyframe: {label}"})
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg",
+                           "data": base64.b64encode(frame.read_bytes()).decode()},
+            })
+        content.append({"type": "text", "text": payload_text})
+        client = anthropic.Anthropic()
+        model = os.getenv("REVIEWER_MODEL", os.getenv("LLM_MODEL", FALLBACK_MODEL))
+        for attempt_model in [model, FALLBACK_MODEL]:
+            try:
+                msg = client.messages.create(
+                    model=attempt_model, max_tokens=4096, system=system,
+                    output_config={"effort": "low"},
+                    messages=[{"role": "user", "content": content}],
+                )
+                if msg.stop_reason == "refusal":
+                    continue  # refusal -> fall back to next model per reviewer prompt
+                text = "".join(b.text for b in msg.content if b.type == "text")
+                m = re.search(r"\{.*\}", text, re.DOTALL)
+                report = json.loads(m.group(0))
+                break
+            except Exception as e:
+                print(f"  [reviewer] {attempt_model} failed: {e}")
     if report is None:
         report = {"overall": "fail", "items": [],
                   "summary": "reviewer_unavailable_fallback"}
