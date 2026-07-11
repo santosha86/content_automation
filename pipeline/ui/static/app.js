@@ -281,19 +281,33 @@ async function openDetail(slug) {
     </div>
   ` : `<div class="detail-block"><h4>QA gate</h4><div class="detail-text">Not graded (no ANTHROPIC_API_KEY at render time).</div></div>`;
 
+  const ytTitle = meta.youtube?.title || "";
+  const ytDesc = meta.youtube?.description || "";
+  const igCap = meta.instagram?.caption || "";
+  const vScore = meta.virality?.score;
+  const vBadge = vScore != null
+    ? `<span class="chip ${vScore >= 70 ? "chip-good" : vScore >= 55 ? "" : "chip-warn"}" title="predicted virality">🔥 ${vScore}/100</span>` : "";
+
   detailPanel.innerHTML = `
     <button class="detail-close" id="detail-close-btn" aria-label="Close">✕</button>
     ${run.video_url ? `<div class="detail-video"><video src="${run.video_url}" controls playsinline></video></div>` : ""}
-    <h3 class="detail-title">${escapeHtml(meta.title || meta.hook_text || slug)}</h3>
+    <h3 class="detail-title">${escapeHtml(meta.title || meta.hook_text || slug)} ${vBadge}</h3>
     <div class="detail-source"><a href="${meta.source_article}" target="_blank" rel="noopener">${escapeHtml(meta.source_article || "")}</a></div>
 
+    <div class="detail-quickbar">
+      ${run.video_url ? `<a class="btn btn-ghost" href="${run.video_url}" download="${slug}.mp4">⬇ Download video</a>` : ""}
+      <button class="btn btn-ghost copy-btn" data-copy="yt">Copy YouTube</button>
+      <button class="btn btn-ghost copy-btn" data-copy="ig">Copy caption</button>
+      <button class="btn btn-ghost" id="social-from-run">✍ Make LinkedIn/X posts</button>
+    </div>
+
     <div class="detail-block">
-      <h4>YouTube</h4>
-      <div class="detail-text"><strong>${escapeHtml(meta.youtube?.title || "")}</strong>\n\n${escapeHtml(meta.youtube?.description || "")}</div>
+      <div class="detail-block-head"><h4>YouTube</h4><button class="btn-link copy-btn" data-copy="yt">copy</button></div>
+      <div class="detail-text" id="yt-text"><strong>${escapeHtml(ytTitle)}</strong>\n\n${escapeHtml(ytDesc)}</div>
     </div>
     <div class="detail-block">
-      <h4>Instagram caption</h4>
-      <div class="detail-text">${escapeHtml(meta.instagram?.caption || "")}</div>
+      <div class="detail-block-head"><h4>Instagram caption</h4><button class="btn-link copy-btn" data-copy="ig">copy</button></div>
+      <div class="detail-text" id="ig-text">${escapeHtml(igCap)}</div>
     </div>
 
     ${qaSection}
@@ -301,15 +315,51 @@ async function openDetail(slug) {
     <div class="detail-actions">
       <button class="btn btn-good" id="approve-btn">Approve</button>
       <button class="btn btn-bad" id="reject-btn">Reject</button>
+      <button class="btn btn-primary" id="publish-btn">Publish…</button>
     </div>
+    <div class="publish-result" id="publish-result" hidden></div>
     <div class="status-note">Current status: <strong>${meta.status}</strong></div>
   `;
 
+  const copyMap = { yt: `${ytTitle}\n\n${ytDesc}`, ig: igCap };
+  detailPanel.querySelectorAll(".copy-btn").forEach((b) =>
+    b.addEventListener("click", () => copyText(copyMap[b.dataset.copy], b)));
   $("#detail-close-btn").addEventListener("click", closeDetail);
   $("#approve-btn").addEventListener("click", () => setStatus(slug, "approved"));
   $("#reject-btn").addEventListener("click", () => setStatus(slug, "rejected"));
+  $("#publish-btn").addEventListener("click", () => publishRun(slug));
+  $("#social-from-run").addEventListener("click", () => { closeDetail(); openSocialForSlug(slug, meta.title || slug); });
 
   overlay.hidden = false;
+}
+
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text || "");
+    const old = btn.textContent; btn.textContent = "copied ✓";
+    setTimeout(() => (btn.textContent = old), 1400);
+  } catch { /* clipboard blocked */ }
+}
+
+async function publishRun(slug) {
+  const box = $("#publish-result");
+  const status = await (await fetch("/api/integrations")).json();
+  const live = status.publish_live && (status.youtube || status.instagram);
+  const label = live ? "Publish LIVE now?" : "No publish keys / PUBLISH_LIVE off — run a DRY RUN (shows what would post)?";
+  if (!confirm(label)) return;
+  box.hidden = false; box.innerHTML = `<span class="muted">Publishing…</span>`;
+  try {
+    const r = await (await fetch(`/api/publish/${slug}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ live }) })).json();
+    box.innerHTML = (r.results || []).map((x) => {
+      const ok = x.status === "published";
+      const cls = ok ? "chip-good" : x.status === "dry_run" ? "" : "chip-warn";
+      const detail = x.url ? ` → <a href="${x.url}" target="_blank">${x.url}</a>`
+        : x.reason ? ` — ${escapeHtml(x.reason)}` : "";
+      return `<div><span class="chip ${cls}">${x.platform}: ${x.status}</span>${detail}</div>`;
+    }).join("");
+  } catch { box.innerHTML = `<span class="chip chip-warn">publish failed</span>`; }
 }
 
 async function setStatus(slug, status) {
@@ -323,7 +373,7 @@ async function setStatus(slug, status) {
 }
 
 // ---------- view tabs ----------
-const views = { studio: $("#view-studio"), usage: $("#view-usage"), analytics: $("#view-analytics"), evals: $("#view-evals"), config: $("#view-config") };
+const views = { studio: $("#view-studio"), usage: $("#view-usage"), social: $("#view-social"), analytics: $("#view-analytics"), evals: $("#view-evals"), config: $("#view-config") };
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => {
@@ -336,8 +386,91 @@ document.querySelectorAll(".tab").forEach((tab) => {
     if (tab.dataset.view === "evals") loadEvals();
     if (tab.dataset.view === "usage") loadUsage();
     if (tab.dataset.view === "analytics") loadAnalytics();
+    if (tab.dataset.view === "social") loadSocial();
   });
 });
+
+// ---------- integration status strip ----------
+const INTEGRATION_LABELS = {
+  openrouter: "OpenRouter", anthropic: "Anthropic", elevenlabs: "Voice", pexels: "Pexels",
+  tavily: "Tavily", flux: "FLUX", youtube: "YouTube", instagram: "Instagram", typefully: "Typefully",
+};
+async function loadIntegrations() {
+  const strip = $("#integration-strip");
+  if (!strip) return;
+  let s;
+  try { s = await (await fetch("/api/integrations")).json(); } catch { return; }
+  const order = ["openrouter", "anthropic", "elevenlabs", "flux", "pexels", "tavily", "youtube", "instagram", "typefully"];
+  strip.innerHTML = order.map((k) => {
+    const on = s[k];
+    return `<span class="int-chip ${on ? "int-on" : "int-off"}" title="${on ? "configured" : "not configured — add key in .env"}">
+      <span class="int-dot"></span>${INTEGRATION_LABELS[k]}</span>`;
+  }).join("") + (s.publish_live ? `<span class="int-chip int-live">● PUBLISH LIVE</span>` : "");
+}
+
+// ---------- social posts ----------
+async function loadSocial() {
+  const sel = $("#social-run-select");
+  if (sel && sel.options.length <= 1) {
+    try {
+      const d = await (await fetch("/api/runs")).json();
+      (d.runs || []).forEach((r) => {
+        const o = document.createElement("option");
+        o.value = r.slug; o.textContent = r.metadata?.title || r.slug;
+        sel.appendChild(o);
+      });
+    } catch { /* ignore */ }
+  }
+}
+function openSocialForSlug(slug, title) {
+  document.querySelector('.tab[data-view="social"]').click();
+  const sel = $("#social-run-select");
+  const set = () => { sel.value = slug; generateSocial(); };
+  if (sel.options.length <= 1) setTimeout(set, 300); else set();
+}
+async function generateSocial() {
+  const out = $("#social-output");
+  const slug = $("#social-run-select").value;
+  const topic = $("#social-topic").value.trim();
+  const platforms = [];
+  if ($("#social-li").checked) platforms.push("linkedin");
+  if ($("#social-tw").checked) platforms.push("twitter");
+  if (!slug && !topic) { out.innerHTML = `<div class="muted">Pick a video or type a topic first.</div>`; return; }
+  if (!platforms.length) { out.innerHTML = `<div class="muted">Select at least one platform.</div>`; return; }
+  out.innerHTML = `<div class="muted">Writing on-brand posts…</div>`;
+  let r;
+  try {
+    r = await (await fetch("/api/social/generate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: slug || undefined, topic: topic || undefined, platforms }) })).json();
+  } catch { out.innerHTML = `<div class="muted">Generation failed.</div>`; return; }
+  let html = "";
+  if (r.linkedin) {
+    html += `<div class="social-card"><div class="social-card-head"><h4>LinkedIn</h4>
+      <div><span class="muted">${r.linkedin.length} chars</span>
+      <button class="btn-link" onclick="copyText(${JSON.stringify(r.linkedin).replace(/"/g, "&quot;")}, this)">copy</button>
+      <button class="btn-link" onclick="scheduleSocial(this)" data-content="${encodeURIComponent(r.linkedin)}">schedule</button></div></div>
+      <div class="social-text">${escapeHtml(r.linkedin)}</div></div>`;
+  }
+  if (r.twitter && r.twitter.length) {
+    const thread = r.twitter.map((t, i) => `<div class="tweet"><span class="tweet-n">${i + 1}</span><span>${escapeHtml(t)}</span><span class="tweet-len">${t.length}</span></div>`).join("");
+    const full = r.twitter.join("\n\n");
+    html += `<div class="social-card"><div class="social-card-head"><h4>X / Twitter thread</h4>
+      <div><button class="btn-link" onclick="copyText(${JSON.stringify(full).replace(/"/g, "&quot;")}, this)">copy all</button>
+      <button class="btn-link" onclick="scheduleSocial(this)" data-content="${encodeURIComponent(full)}">schedule</button></div></div>
+      <div class="thread">${thread}</div></div>`;
+  }
+  out.innerHTML = html || `<div class="muted">No posts generated.</div>`;
+}
+async function scheduleSocial(btn) {
+  const content = decodeURIComponent(btn.dataset.content);
+  btn.textContent = "scheduling…";
+  const r = await (await fetch("/api/social/schedule", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, publish_at: "next-free-slot" }) })).json();
+  btn.textContent = r.status === "scheduled" ? "scheduled ✓" : (r.status === "not_configured" ? "add TYPEFULLY_API_KEY" : "failed");
+  setTimeout(() => (btn.textContent = "schedule"), 2500);
+}
 
 // ---------- analytics ----------
 function fmtNum(n) { return !n ? "0" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n); }
@@ -644,3 +777,13 @@ $("#config-save").addEventListener("click", saveConfig);
 // ---------- init ----------
 loadRuns();
 resumeAnyJob();
+loadIntegrations();
+document.addEventListener("DOMContentLoaded", () => {
+  const sg = $("#social-generate");
+  if (sg) sg.addEventListener("click", generateSocial);
+});
+// DOMContentLoaded may have already fired (script at end of body) — wire directly too.
+{
+  const sg = $("#social-generate");
+  if (sg) sg.addEventListener("click", generateSocial);
+}

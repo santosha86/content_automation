@@ -319,6 +319,68 @@ def publish_status():
     return publisher.status()
 
 
+@app.post("/api/publish/{slug}")
+def publish_run(slug: str, body: dict = None):
+    """Publish (or dry-run) a finished video. live=true only posts if creds + PUBLISH_LIVE."""
+    from .. import publisher
+    body = body or {}
+    platforms = body.get("platforms") or ["youtube", "instagram"]
+    live = bool(body.get("live"))
+    try:
+        return publisher.publish(slug, platforms=platforms, live=live)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/api/integrations")
+def integrations():
+    """What's wired, for the status strip — no secret values, just booleans."""
+    def has(k):
+        return bool(os.getenv(k))
+    from .. import publisher
+    pub = publisher.status()
+    return {
+        "openrouter": has("OPENROUTER_API_KEY"),
+        "anthropic": has("ANTHROPIC_API_KEY"),
+        "elevenlabs": has("ELEVENLABS_API_KEY"),
+        "pexels": has("PEXELS_API_KEY"),
+        "tavily": has("TAVILY_API_KEY"),
+        "flux": os.getenv("MFLUX_ENABLED", "").lower() in ("1", "true", "yes"),
+        "youtube": pub["youtube_ready"],
+        "instagram": pub["instagram_ready"],
+        "typefully": has("TYPEFULLY_API_KEY"),
+        "publish_live": pub["live"],
+    }
+
+
+@app.post("/api/social/generate")
+def social_generate(body: dict = None):
+    """Draft LinkedIn + X posts from a run slug or a raw topic."""
+    from .. import social
+    body = body or {}
+    platforms = body.get("platforms") or ["linkedin", "twitter"]
+    if body.get("slug"):
+        ctx = social.context_from_slug(body["slug"])
+    else:
+        ctx = {"title": body.get("topic", ""), "hook": "", "summary": body.get("topic", ""), "url": ""}
+    if not ctx.get("title"):
+        raise HTTPException(400, "provide a slug or a topic")
+    try:
+        return social.generate(**ctx, platforms=platforms)
+    except Exception as e:
+        raise HTTPException(500, f"generation failed: {str(e)[:200]}")
+
+
+@app.post("/api/social/schedule")
+def social_schedule(body: dict = None):
+    from .. import social
+    body = body or {}
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(400, "empty content")
+    return social.schedule_typefully(content, body.get("publish_at", "next-free-slot"))
+
+
 @app.get("/api/checklist")
 def get_checklist():
     checklist = json.loads((ROOT / "checklist.schema.json").read_text())

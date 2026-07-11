@@ -19,6 +19,7 @@
       <nav class="tabs" role="tablist">
         <button class="tab active" data-view="studio" role="tab" aria-selected="true">Studio</button>
         <button class="tab" data-view="usage" role="tab" aria-selected="false">Usage</button>
+        <button class="tab" data-view="social" role="tab" aria-selected="false">Social</button>
         <button class="tab" data-view="analytics" role="tab" aria-selected="false">Analytics</button>
         <button class="tab" data-view="evals" role="tab" aria-selected="false">Evals</button>
         <button class="tab" data-view="config" role="tab" aria-selected="false">Config</button>
@@ -28,6 +29,8 @@
   </header>
 
   <main class="page" id="view-studio">
+
+    <div class="integration-strip" id="integration-strip"></div>
 
     <section class="generate-panel" id="generate-panel">
       <div class="generate-row">
@@ -91,6 +94,32 @@
       <div class="empty-state" id="usage-empty" hidden>
         <p>No usage tracked yet. Run <code>make plan</code> or generate a video — spend is captured automatically.</p>
       </div>
+    </section>
+  </main>
+
+  <main class="page" id="view-social" hidden>
+    <section class="config-panel">
+      <div class="section-head">
+        <h2>Social posts</h2>
+        <span class="muted">on-brand LinkedIn + X drafts from a video or a fresh topic</span>
+      </div>
+      <div class="social-input">
+        <label class="field">
+          <span class="field-label">From a video <span class="optional">(optional)</span></span>
+          <select id="social-run-select"><option value="">— pick a rendered video —</option></select>
+        </label>
+        <div class="social-or">or</div>
+        <label class="field">
+          <span class="field-label">Type a topic</span>
+          <input type="text" id="social-topic" placeholder="e.g. OpenAI's new coding agent runs your CI">
+        </label>
+        <div class="social-platforms">
+          <label><input type="checkbox" id="social-li" checked> LinkedIn</label>
+          <label><input type="checkbox" id="social-tw" checked> X / Twitter</label>
+        </div>
+        <button class="btn btn-primary" id="social-generate">Generate posts</button>
+      </div>
+      <div id="social-output" class="social-output"></div>
     </section>
   </main>
 
