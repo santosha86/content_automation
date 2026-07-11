@@ -52,3 +52,5 @@ branding:
 scout:
   max_candidates: 25        # articles considered per run
   max_age_hours: 48
+  # Trend lanes (free): Hacker News + these subreddits feed hotter candidates into ranking.
+  subreddits: [artificial, MachineLearning, LocalLLaMA, OpenAI, singularity, ChatGPT]
