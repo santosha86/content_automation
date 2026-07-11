@@ -34,6 +34,11 @@ music:
   synth_volume: 0.55   # gain for generated pads (lower = subtler under the voice)
   track_volume: 0.10   # gain for real mp3s you drop in (they're mastered loud)
 
+# Virality pre-check: stories scored 0-100 before render; below min_score the top
+# candidate is flagged as a weak news day (logged, never hard-blocks in auto mode).
+virality:
+  min_score: 55
+
 # Branded end-card (reference rule: one reusable end-card, identical every video, last ~2s)
 branding:
   name: "SIGNAL"

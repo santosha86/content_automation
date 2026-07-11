@@ -16,7 +16,7 @@ import datetime
 import json
 import re
 
-from . import checkpoints, director, hooksmith, scriptwriter, strategist, usage
+from . import checkpoints, director, hooksmith, scriptwriter, strategist, usage, virality
 from .util import ROOT
 
 
@@ -39,9 +39,22 @@ def plan(topic: str = "", article_url: str = "", log=print) -> dict:
         stories = strategist.top_stories(3)
         for s in stories:
             log(f"      #{s['rank']} [{s['lane']}] {s['title']}  ({s['name_anchor'] or 'no anchor'})")
+        # Virality pre-check: score each candidate, re-rank by potential, flag weak ones
+        # BEFORE we commit a render to them.
+        log("      virality pre-check (will it perform?)...")
+        stories = virality.score_candidates(stories, log=log)
+        top = stories[0]["virality"]
+        if top["score"] < virality.min_score():
+            log(f"      ⚠️  best candidate scores {top['score']}/100 (< {virality.min_score()} floor) — "
+                f"weak news day; consider a manual topic. Reason: {top.get('risks','')}")
+    def _story_detail(s):
+        v = s.get("virality") or {}
+        if not v:
+            return s["why"]
+        return f"{virality.emoji(v.get('verdict',''))} {v['score']}/100 · {v.get('best_angle') or s['why']}"
     idx = checkpoints.resolve(
         "story_pick",
-        [{"label": f"[{s['lane']}] {s['title']}", "detail": s["why"]} for s in stories],
+        [{"label": f"[{s['lane']}] {s['title']}", "detail": _story_detail(s)} for s in stories],
         prompt="Which story should we make?", log=log,
     )
     story = stories[idx]
