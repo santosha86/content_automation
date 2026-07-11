@@ -21,7 +21,8 @@ Reply with JSON only:
   "hook_text": "<on-screen hook, max 7 words>",
   "segments": [
     {{
-      "voiceover": "<1-2 spoken sentences>",
+      "voiceover": "<1-2 spoken sentences, written to be SAID with the segment's emotion>",
+      "emotion": "<one of: excited | curious | serious | amazed | urgent | confident>",
       "broll_query": "<2-3 word stock-video search phrase, visually concrete (e.g. 'server room', 'person typing laptop')>",
       "overlay": "<2-4 word on-screen label, or empty string>"
     }}

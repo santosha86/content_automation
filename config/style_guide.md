@@ -15,6 +15,16 @@ place where "our taste" lives.
 - Good patterns: "X just did Y.", "This costs $N and replaces Z.", "Nobody noticed X shipped Y."
 - Never open with "In the world of AI..." or the company's name alone.
 
+## Emotional delivery (every segment carries an emotion)
+- The script must have an emotional ARC, not one flat tone:
+  hook = surprise/urgency → facts = building excitement → stakes = serious/direct →
+  takeaway = confident conviction → CTA = warm curiosity.
+- Enthusiasm comes from genuine stakes ("this changes how you'll work"), never from
+  hype adjectives. Write sentences a person would SAY with that emotion — short bursts
+  when excited, slower weight when serious.
+- Each segment declares one emotion: excited | curious | serious | amazed | urgent | confident.
+- Vary it: never two consecutive segments with the same emotion.
+
 ## Structure (30–50s)
 1. Hook — the surprising thing (1 sentence)
 2. What actually happened — concrete facts (2-3 sentences)

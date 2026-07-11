@@ -6,6 +6,12 @@ video:
   target_seconds: 40        # writer aims for this spoken length
   max_segments: 6
 
+# Voice
+voice:
+  # eleven_v3 = emotional delivery via audio tags ([excited], [curious]...).
+  # Fall back to eleven_multilingual_v2 if v3 is unavailable on your plan.
+  model: eleven_v3
+
 # Captions
 captions:
   font: "Arial Black"
