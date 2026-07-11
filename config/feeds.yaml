@@ -1,0 +1,18 @@
+# AI news sources. Add/remove freely — scout reads all of them.
+feeds:
+  - name: TechCrunch AI
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+  - name: VentureBeat AI
+    url: https://venturebeat.com/category/ai/feed/
+  - name: The Verge AI
+    url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+  - name: Ars Technica AI
+    url: https://arstechnica.com/ai/feed/
+  - name: MIT Tech Review
+    url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+  - name: Hacker News (front page)
+    url: https://hnrss.org/frontpage
+  - name: Google AI Blog
+    url: https://blog.google/technology/ai/rss/
+  - name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml

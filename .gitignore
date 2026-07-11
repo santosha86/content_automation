@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+output/
+state/
+assets/music/*
+!assets/music/.gitkeep
+*.mp4
+*.mp3
+*.wav
+*.aiff

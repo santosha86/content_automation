@@ -1,0 +1,28 @@
+# Video output
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  target_seconds: 40        # writer aims for this spoken length
+  max_segments: 6
+
+# Captions
+captions:
+  font: "Arial Black"
+  font_size: 96
+  words_per_chunk: 3        # words shown per caption card
+  highlight_color: "&H00FFD900"   # ASS BGR: cyan-ish yellow accent
+
+# Whisper (caption timing)
+whisper:
+  model: small
+  compute_type: int8
+
+# Music bed (optional: drop royalty-free mp3s in assets/music/)
+music:
+  volume: 0.12
+
+# Scout
+scout:
+  max_candidates: 25        # articles considered per run
+  max_age_hours: 48
