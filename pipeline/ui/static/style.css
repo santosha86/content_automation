@@ -338,3 +338,8 @@ button { font-family: inherit; }
 .usage-stage-table th.num, .usage-stage-table td.num { text-align: right; }
 .usage-stage-table td { padding: 5px 8px; border-top: 1px solid var(--border); }
 .usage-free { margin-top: 8px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+
+/* ---------- Analytics tab ---------- */
+.analytics-banner { background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 10px 14px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 16px; }
+.chip-good { background: var(--good-quiet); color: var(--good); }

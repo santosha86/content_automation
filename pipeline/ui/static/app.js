@@ -323,7 +323,7 @@ async function setStatus(slug, status) {
 }
 
 // ---------- view tabs ----------
-const views = { studio: $("#view-studio"), usage: $("#view-usage"), evals: $("#view-evals"), config: $("#view-config") };
+const views = { studio: $("#view-studio"), usage: $("#view-usage"), analytics: $("#view-analytics"), evals: $("#view-evals"), config: $("#view-config") };
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => {
@@ -335,8 +335,51 @@ document.querySelectorAll(".tab").forEach((tab) => {
     if (tab.dataset.view === "config") loadConfig();
     if (tab.dataset.view === "evals") loadEvals();
     if (tab.dataset.view === "usage") loadUsage();
+    if (tab.dataset.view === "analytics") loadAnalytics();
   });
 });
+
+// ---------- analytics ----------
+function fmtNum(n) { return !n ? "0" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n); }
+
+async function loadAnalytics() {
+  const tiles = $("#analytics-tiles"), rows = $("#analytics-rows"), empty = $("#analytics-empty");
+  const banner = $("#analytics-banner"), src = $("#analytics-source");
+  tiles.innerHTML = ""; rows.innerHTML = "";
+  let d;
+  try { d = await (await fetch("/api/analytics")).json(); }
+  catch { tiles.innerHTML = `<div class="muted">Failed to load analytics.</div>`; return; }
+  banner.hidden = d.source !== "dummy";
+  src.textContent = `${d.platform} · ${d.source === "dummy" ? "sample data" : "live"} · ${d.totals.videos} videos`;
+  const t = d.totals;
+  const tileData = [
+    ["Total views", fmtNum(t.views), "all videos"],
+    ["Avg retention", (t.avg_retention_pct || 0) + "%", "average view %"],
+    ["Watch hours", fmtNum(Math.round(t.watch_hours)), "estimated"],
+    ["New followers", fmtNum(t.new_followers), "attributed"],
+  ];
+  tiles.innerHTML = tileData.map(([label, big, sub]) =>
+    `<div class="usage-tile"><div class="usage-tile-label">${label}</div><div class="usage-tile-value">${big}</div><div class="usage-tile-sub">${sub}</div></div>`).join("");
+
+  const vids = d.videos || [];
+  empty.hidden = vids.length > 0;
+  rows.innerHTML = vids.map(v => {
+    const pred = v.predicted_score != null
+      ? `<span class="chip ${v.predicted_score >= 70 ? "chip-good" : v.predicted_score >= 55 ? "" : "chip-warn"}">${v.predicted_score}</span>`
+      : `<span class="muted">—</span>`;
+    return `<tr>
+      <td class="mono">${escapeHtml(v.date || "")}</td>
+      <td class="usage-title" title="${escapeHtml(v.title || "")}">${escapeHtml(v.title || v.slug)}</td>
+      <td class="num">${pred}</td>
+      <td class="num">${fmtNum(v.views)}</td>
+      <td class="num">${v.avg_view_pct}%</td>
+      <td class="num">${fmtNum(v.likes)}</td>
+      <td class="num">${fmtNum(v.comments)}</td>
+      <td class="num">${fmtNum(v.shares)}</td>
+      <td class="num">${fmtNum(v.new_followers)}</td>
+    </tr>`;
+  }).join("");
+}
 
 // ---------- usage ----------
 function fmtMoney(v) { return v === null || v === undefined ? "—" : "$" + v.toFixed(v < 1 ? 3 : 2); }

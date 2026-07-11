@@ -306,6 +306,19 @@ def usage_detail(slug: str):
     return {"slug": slug, "sessions": sessions_out, "free_stages": FREE_STAGES}
 
 
+@app.get("/api/analytics")
+def analytics_overview(platform: str = "youtube"):
+    """Per-video performance (dummy data until ANALYTICS_LIVE — see pipeline/analytics.py)."""
+    from .. import analytics
+    return analytics.overview(platform)
+
+
+@app.get("/api/publish/status")
+def publish_status():
+    from .. import publisher
+    return publisher.status()
+
+
 @app.get("/api/checklist")
 def get_checklist():
     checklist = json.loads((ROOT / "checklist.schema.json").read_text())
