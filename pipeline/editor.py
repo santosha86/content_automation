@@ -156,12 +156,13 @@ Dialogue: 0,0:00:00.25,0:00:{seconds:05.2f},Sub,,0,0,0,,{{\\fad(250,150)}}{sub}
     return out
 
 
-def _pick_music(script: dict) -> Path | None:
-    tracks = sorted((ROOT / "assets" / "music").glob("*.mp3"))
-    if not tracks:
-        return None
-    idx = int(hashlib.sha1(script["topic"]["title"].encode()).hexdigest(), 16) % len(tracks)
-    return tracks[idx]
+def _pick_music(script: dict, seconds: float, run_dir: Path) -> tuple[Path, float] | None:
+    """Music bed for the storyboard's mood (real track from assets/music/<mood>/ if
+    present, else a synthesized bed). Returns (path, mix_gain) or None for mood 'none'."""
+    from . import music
+    mood = (script.get("music") or {}).get("mood", "tech_minimal")
+    vol = settings().get("music", {}).get("volume", 0.12)
+    return music.pick(mood, seconds, run_dir, track_volume=vol)
 
 
 def _cut_shot(clip: Path, dur: float, camera: str, out: Path, fit: str) -> None:
@@ -233,7 +234,8 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
     # The narration audio is padded by the end-card length so the card plays out over
     # silence/music instead of being truncated by -shortest.
     final = run_dir / "final.mp4"
-    music = _pick_music(script)
+    total_dur = bounds[-1][1] + endcard_sec
+    music = _pick_music(script, total_dur, run_dir)
     flash_t = bounds[0][1]
     vfilter = (f"ass='{subs}',"
                f"eq=brightness=0.85:enable='between(t,{flash_t:.2f},{flash_t + FLASH_LEN:.2f})'")
@@ -244,11 +246,11 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-movflags", "+faststart",
             "-shortest", str(final)]
     if music:
-        vol = settings()["music"]["volume"]
+        track, gain = music
         run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
-                 "-stream_loop", "-1", "-i", str(music),
+                 "-stream_loop", "-1", "-i", str(track),
                  "-filter_complex",
-                 f"[0:v]{vfilter}[v];{apad};[2:a]volume={vol}[m];[vo][m]amix=inputs=2:duration=first:normalize=0[a]",
+                 f"[0:v]{vfilter}[v];{apad};[2:a]volume={gain}[m];[vo][m]amix=inputs=2:duration=first:normalize=0[a]",
                  "-map", "[v]", "-map", "[a]", *tail])
     else:
         run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),

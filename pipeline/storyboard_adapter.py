@@ -88,6 +88,7 @@ def to_script(storyboard: dict) -> dict:
         "youtube": meta["youtube"],
         "instagram": meta["instagram"],
         "hashtags": meta.get("hashtags", []),
+        "music": storyboard.get("music", {}),  # mood drives the Editor's bed selection
         "storyboard": storyboard,  # keep the brain artifact attached for later stages
     }
 
