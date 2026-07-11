@@ -82,6 +82,13 @@ STRATEGY (b-roll must show the subject, not the theme):
 Design ONE continuous visual concept (a single authored idea carrying the whole video,
 not a slideshow), and for EACH beat a visual + composition that serves it.
 
+CRUCIAL — cut with the words: split each beat's narration into 1-3 short PHRASES and give
+each phrase its own shot whose imagery shows THAT phrase's concrete subject. This is what
+keeps images in sync with the script and makes the cut rhythm feel human (every ~2-4s), not
+one static clip per beat. A one-idea beat may have a single shot; a beat that names two
+things (a company AND a product, a cause AND an effect) should have a shot for each. Every
+shot's `phrase` must be an exact substring of that beat's narration.
+
 Reply with JSON only:
 {{
   "concept": {{
@@ -97,7 +104,17 @@ Reply with JSON only:
         "source": "broll_video|broll_image|generated_image|face|screen_capture",
         "query": "<stock query tied to the beat's concrete subject; for generated_image leave empty>",
         "prompt": "<image-gen prompt when source=generated_image, else empty>",
-        "must_show": "<the one thing the frame MUST contain for the beat to make sense>"
+        "must_show": "<the one thing the frame MUST contain for the beat to make sense>",
+        "shots": [
+          {{
+            "phrase": "<the exact run of words from THIS beat's narration this shot covers>",
+            "source": "broll_video|generated_image|screen_capture",
+            "query": "<stock query for this phrase's concrete subject>",
+            "prompt": "<image-gen prompt if source=generated_image, else empty>",
+            "must_show": "<the one thing this shot must show>",
+            "camera": "none|zoom_in|zoom_out|punch_in"
+          }}
+        ]
       }},
       "composition": {{
         "layout": "full|split_face_bottom|split_face_top|pip_face",
@@ -124,7 +141,15 @@ def _merge(scaffold: dict, layer: dict) -> dict:
     by_id = {b.get("id"): b for b in layer.get("beats", [])}
     for beat in sb["beats"]:
         lb = by_id.get(beat["id"], {})
-        beat["visual"] = lb.get("visual", {"source": "broll_video", "query": beat["narration"][:40]})
+        visual = lb.get("visual", {"source": "broll_video", "query": beat["narration"][:40]})
+        # Drop malformed shots so an odd model reply can't fail schema validation;
+        # a beat with no valid shots simply falls back to its single visual.
+        shots = [s for s in visual.get("shots", []) if isinstance(s, dict) and s.get("phrase") and s.get("must_show")]
+        if shots:
+            visual["shots"] = shots[:3]
+        else:
+            visual.pop("shots", None)
+        beat["visual"] = visual
         beat["composition"] = lb.get("composition", {"layout": "full"})
     return sb
 

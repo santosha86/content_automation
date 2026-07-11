@@ -9,11 +9,31 @@ Editing style codified from observation1.md (reference-short teardown):
 import hashlib
 from pathlib import Path
 
+from . import shots as shotplan
 from .util import ROOT, ffmpeg_bin, media_duration, run_cmd, settings
 
 HOOK_T0 = 0.5      # frame 0 stays text-free — the image is the scroll-stopper
 HOOK_STEP = 0.45   # seconds per word in the kinetic build
 FLASH_LEN = 0.08   # white flash masking the hook -> body cut
+
+# Ken-Burns moves (reference uses subtle motion so stills/loops don't feel dead).
+# zoompan with d=1 + pzoom accumulates a continuous move across a video clip.
+# NOTE: zoompan defaults its output to 1280x720 — the `s=`/`fps=` are appended per
+# render from settings so the frame stays 9:16, else the export silently goes landscape.
+_CAMERA_Z = {
+    "zoom_in":  "min(pzoom+0.0012,1.12)",
+    "punch_in": "min(pzoom+0.0026,1.18)",
+    "zoom_out": "min(pzoom+0.0010,1.10)",
+}
+
+
+def _camera_vf(camera: str) -> str:
+    z = _CAMERA_Z.get(camera)
+    if not z:
+        return ""
+    v = settings()["video"]
+    return (f"zoompan=z='{z}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":s={v['width']}x{v['height']}:fps={v['fps']}")
 
 
 def _ts(seconds: float) -> str:
@@ -111,7 +131,23 @@ def _pick_music(script: dict) -> Path | None:
     return tracks[idx]
 
 
-def assemble(script: dict, seg_audio: list[Path], seg_video: list[Path], run_dir: Path) -> Path:
+def _cut_shot(clip: Path, dur: float, camera: str, out: Path, fit: str) -> None:
+    """Trim/loop one shot clip to `dur`, applying its Ken-Burns move. Falls back to a
+    static fit if the motion filter errors, so a single clip never fails the render."""
+    ff = ffmpeg_bin()
+    move = _camera_vf(camera)
+    vf = f"{fit},{move}" if move else fit
+    try:
+        run_cmd([ff, "-y", "-stream_loop", "-1", "-i", str(clip), "-t", f"{dur:.3f}",
+                 "-vf", vf, "-an", "-c:v", "libx264", "-preset", "fast",
+                 "-pix_fmt", "yuv420p", str(out)])
+    except RuntimeError:
+        run_cmd([ff, "-y", "-stream_loop", "-1", "-i", str(clip), "-t", f"{dur:.3f}",
+                 "-vf", fit, "-an", "-c:v", "libx264", "-preset", "fast",
+                 "-pix_fmt", "yuv420p", str(out)])
+
+
+def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], run_dir: Path) -> Path:
     v = settings()["video"]
     ff = ffmpeg_bin()
 
@@ -122,7 +158,8 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[Path], run_dir
     run_cmd([ff, "-y", "-f", "concat", "-safe", "0", "-i", str(alist),
              "-ar", "44100", "-ac", "1", str(voiceover)])
 
-    # 2. per-segment video, trimmed/looped to its narration length
+    # 2. expand each segment into per-shot cuts that fill its narration span, so the
+    #    b-roll cuts WITH the words instead of one static clip per beat.
     durs = [media_duration(p) for p in seg_audio]
     bounds = []
     t = 0.0
@@ -132,12 +169,15 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[Path], run_dir
     fit = (f"scale={v['width']}:{v['height']}:force_original_aspect_ratio=increase,"
            f"crop={v['width']}:{v['height']},setsar=1,fps={v['fps']}")
     seg_outs = []
-    for i, (dur, vid) in enumerate(zip(durs, seg_video)):
-        out = run_dir / f"cut_{i:02d}.mp4"
-        run_cmd([ff, "-y", "-stream_loop", "-1", "-i", str(vid), "-t", f"{dur:.3f}",
-                 "-vf", fit, "-an", "-c:v", "libx264", "-preset", "fast",
-                 "-pix_fmt", "yuv420p", str(out)])
-        seg_outs.append(out)
+    for i, (dur, clips) in enumerate(zip(durs, seg_video)):
+        shot_meta = script["segments"][i].get("shots") or [{"camera": "none"}]
+        spans = shotplan.split_durations(dur, shot_meta)  # length = shots kept
+        for k, span in enumerate(spans):
+            clip = clips[k] if k < len(clips) else clips[-1]
+            camera = shot_meta[k].get("camera", "none") if k < len(shot_meta) else "none"
+            out = run_dir / f"cut_{i:02d}_{k:02d}.mp4"
+            _cut_shot(clip, span, camera, out, fit)
+            seg_outs.append(out)
 
     # 3. concat video
     vlist = run_dir / "video_list.txt"

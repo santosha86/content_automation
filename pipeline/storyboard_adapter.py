@@ -11,6 +11,7 @@ Phase B on top of this bridge.
 """
 import json
 
+from . import shots as shotplan
 from .util import llm_json, style_guide
 
 
@@ -58,12 +59,24 @@ Reply JSON only:
 
 def to_script(storyboard: dict) -> dict:
     """Map a validated storyboard onto the legacy render `script` contract."""
-    segments = [{
-        "voiceover": b["narration"],
-        "emotion": b.get("emotion", "confident"),
-        "broll_query": _broll_query(b),
-        "overlay": b.get("overlay", ""),
-    } for b in storyboard["beats"]]
+    concept = storyboard.get("concept", {})
+    segments = []
+    for b in storyboard["beats"]:
+        planned = shotplan.plan_from_beat(b)
+        # Prepend the concept's continuity to every generated-image prompt so identity
+        # stays consistent across shots (schema: concept.continuity).
+        for s in planned:
+            if s["source"] == "generated_image" and s.get("prompt"):
+                cont = concept.get("continuity", "")
+                s["prompt"] = f"{cont} {s['prompt']}".strip() if cont else s["prompt"]
+                s["negative_prompt"] = concept.get("negative_prompt", "")
+        segments.append({
+            "voiceover": b["narration"],
+            "emotion": b.get("emotion", "confident"),
+            "broll_query": _broll_query(b),
+            "overlay": b.get("overlay", ""),
+            "shots": planned,
+        })
 
     meta = _platform_meta(storyboard)
     topic = storyboard["topic"]

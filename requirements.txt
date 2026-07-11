@@ -8,3 +8,8 @@ kokoro-onnx>=0.5.0
 soundfile>=0.14.0
 fastapi>=0.115
 uvicorn>=0.32
+
+# Optional: local FLUX image generation for generated_image beats (Apple Silicon / MLX).
+# Not installed by default — enable with `pip install mflux` (first run downloads the
+# quantized schnell model, ~a few GB). Without it, generated_image beats fall back to stock.
+# mflux>=0.4.0

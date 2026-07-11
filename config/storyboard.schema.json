@@ -60,7 +60,25 @@
               "source": { "type": "string", "enum": ["broll_video", "broll_image", "generated_image", "face", "screen_capture"], "description": "broll_* = stock (Pexels). generated_image = FLUX local / Gemini ladder. face = presenter cam (clone/avatar later). screen_capture = product UI or repo page." },
               "query": { "type": "string", "description": "Stock-search query, tightly tied to the narration's concrete subject — not the abstract theme." },
               "prompt": { "type": "string", "description": "Image-generation prompt when source=generated_image." },
-              "must_show": { "type": "string", "description": "The one thing the frame must contain for the beat to make sense (proof rule B6)." }
+              "must_show": { "type": "string", "description": "The one thing the frame must contain for the beat to make sense (proof rule B6)." },
+              "shots": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "description": "Ordered sub-shots so the visual CUTS WITH THE NARRATION (reference cuts every 2-4s) instead of one static clip per beat. Split the beat's narration into 1-3 phrases; each shot shows that phrase's concrete subject. Optional — a beat with no shots uses the single visual above. The Editor times each shot by its phrase's share of the beat.",
+                "items": {
+                  "type": "object",
+                  "required": ["phrase", "must_show"],
+                  "properties": {
+                    "phrase": { "type": "string", "description": "The exact words of the narration this shot covers — used to time the cut and to keep image and words in sync." },
+                    "source": { "type": "string", "enum": ["broll_video", "broll_image", "generated_image", "face", "screen_capture"], "default": "broll_video" },
+                    "query": { "type": "string", "description": "Stock-search query for this phrase's concrete subject." },
+                    "prompt": { "type": "string", "description": "Image-gen prompt when source=generated_image." },
+                    "must_show": { "type": "string", "description": "The one thing this shot must contain (proof rule B6)." },
+                    "camera": { "type": "string", "enum": ["none", "zoom_in", "zoom_out", "punch_in"], "default": "zoom_in", "description": "Ken-Burns move the Editor applies to this shot so stills/loops feel alive." }
+                  }
+                }
+              }
             }
           },
           "composition": {

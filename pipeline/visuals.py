@@ -1,9 +1,16 @@
-"""Visuals: portrait b-roll per segment. Pexels when key present, generated gradient fallback."""
+"""Visuals: portrait b-roll, one clip PER SHOT so cuts sync with the narration.
+
+Each segment carries a shot list (Director-planned or a single fallback). For every
+shot we fetch a clip: a FLUX-generated still (generated_image), else Pexels stock, else
+a generated gradient. Returns shot clips grouped per segment; the Editor lays them out
+across the segment's narration and applies each shot's Ken-Burns move.
+"""
 import os
 from pathlib import Path
 
 import requests
 
+from . import imagegen
 from .util import ffmpeg_bin, run_cmd, settings
 
 FALLBACK_COLORS = ["0x1a1a2e", "0x16213e", "0x0f3460", "0x1f1d36", "0x222831", "0x27374d"]
@@ -41,21 +48,47 @@ def _gradient(index: int, seconds: float, out: Path) -> None:
     ])
 
 
-def gather(script: dict, seg_durations: list[float], run_dir: Path) -> list[Path]:
-    """One b-roll clip per segment; returns paths in order."""
+def _still_to_clip(img: Path, seconds: float, out: Path) -> None:
+    """Wrap a generated still into a video clip the Editor can loop/trim/Ken-Burns."""
+    v = settings()["video"]
+    fit = (f"scale={v['width']}:{v['height']}:force_original_aspect_ratio=increase,"
+           f"crop={v['width']}:{v['height']},setsar=1,fps={v['fps']}")
+    run_cmd([ffmpeg_bin(), "-y", "-loop", "1", "-i", str(img), "-t", f"{max(seconds, 2.0):.2f}",
+             "-vf", fit, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)])
+
+
+def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: bool) -> None:
+    """Fetch one clip for a shot: FLUX still -> Pexels stock -> gradient."""
+    if shot.get("source") == "generated_image":
+        img = imagegen.generate(shot, out.with_suffix(".png"))
+        if img:
+            _still_to_clip(img, seconds, out)
+            return
+    query = (shot.get("query") or shot.get("must_show") or "").strip()
+    if use_pexels and query:
+        try:
+            if _pexels(query, out):
+                return
+        except Exception as e:
+            print(f"  [visuals] pexels failed for '{query}': {e}")
+    _gradient(seed, seconds, out)
+
+
+def gather(script: dict, seg_durations: list[float], run_dir: Path) -> list[list[Path]]:
+    """One clip PER SHOT, grouped per segment: returns [[shot clips], ...] in order."""
     use_pexels = bool(os.getenv("PEXELS_API_KEY"))
     if not use_pexels:
         print("  [visuals] no PEXELS_API_KEY — using generated backgrounds")
-    paths = []
+    print(f"  [visuals] image-gen: {imagegen.status()}")
+    per_seg = []
     for i, seg in enumerate(script["segments"]):
-        out = run_dir / f"broll_{i:02d}.mp4"
-        got = False
-        if use_pexels:
-            try:
-                got = _pexels(seg["broll_query"], out)
-            except Exception as e:
-                print(f"  [visuals] pexels failed for '{seg['broll_query']}': {e}")
-        if not got:
-            _gradient(i, seg_durations[i] + 0.5, out)
-        paths.append(out)
-    return paths
+        shots = seg.get("shots") or [{"source": "broll_video", "query": seg.get("broll_query", ""),
+                                       "camera": "none"}]
+        clips = []
+        for j, shot in enumerate(shots):
+            out = run_dir / f"shot_{i:02d}_{j:02d}.mp4"
+            _shot_clip(shot, seed=i * 7 + j, seconds=seg_durations[i] + 0.5, out=out, use_pexels=use_pexels)
+            clips.append(out)
+        per_seg.append(clips)
+        print(f"  [visuals] segment {i}: {len(clips)} shot(s)")
+    return per_seg
