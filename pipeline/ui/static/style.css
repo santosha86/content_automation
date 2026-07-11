@@ -272,3 +272,35 @@ button { font-family: inherit; }
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--accent); margin-left: 6px;
 }
+
+/* ---------- Evals: blind A/B ---------- */
+.eval-run { margin-bottom: 22px; }
+.eval-run-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.eval-run-title { font-weight: 700; font-size: 15px; }
+.eval-station {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  padding: 14px; margin-bottom: 12px;
+}
+.eval-station-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.eval-station-head h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.eval-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .eval-sides { grid-template-columns: 1fr; } }
+.eval-side {
+  border: 1px solid var(--border); border-radius: 7px; padding: 10px;
+  background: var(--surface-2); display: flex; flex-direction: column; gap: 8px;
+}
+.eval-side.winner { border-color: var(--good); background: var(--good-quiet); }
+.eval-side-head { display: flex; align-items: center; gap: 8px; }
+.eval-label {
+  font-weight: 800; font-size: 15px; width: 24px; height: 24px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-3); color: var(--text);
+}
+.eval-provider { font-size: 12px; font-weight: 700; color: var(--accent); }
+.eval-output {
+  font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.45;
+  background: var(--ground); border-radius: 6px; padding: 8px; margin: 0;
+  max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+.eval-err { color: var(--bad); font-size: 12px; }
+.eval-pick { align-self: flex-start; }

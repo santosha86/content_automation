@@ -18,6 +18,7 @@
     <div class="topbar-right">
       <nav class="tabs" role="tablist">
         <button class="tab active" data-view="studio" role="tab" aria-selected="true">Studio</button>
+        <button class="tab" data-view="evals" role="tab" aria-selected="false">Evals</button>
         <button class="tab" data-view="config" role="tab" aria-selected="false">Config</button>
       </nav>
       <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
@@ -67,6 +68,20 @@
       </div>
     </section>
 
+  </main>
+
+  <main class="page" id="view-evals" hidden>
+    <section class="config-panel">
+      <div class="section-head">
+        <h2>Model evals</h2>
+        <span class="muted">blind A/B: local (ollama) vs paid (anthropic) — pick the better output, provider is revealed after</span>
+      </div>
+      <p class="config-note">Run <code>make eval</code> (or the CLI) to add a benchmark. Pick without knowing which side is which — the winner feeds the local-first cost policy.</p>
+      <div id="evals-list"></div>
+      <div class="empty-state" id="evals-empty" hidden>
+        <p>No evals yet. Run <code>make eval</code> to benchmark a story across providers.</p>
+      </div>
+    </section>
   </main>
 
   <main class="page" id="view-config" hidden>

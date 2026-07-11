@@ -323,7 +323,7 @@ async function setStatus(slug, status) {
 }
 
 // ---------- view tabs ----------
-const views = { studio: $("#view-studio"), config: $("#view-config") };
+const views = { studio: $("#view-studio"), evals: $("#view-evals"), config: $("#view-config") };
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => {
@@ -333,8 +333,78 @@ document.querySelectorAll(".tab").forEach((tab) => {
     });
     Object.entries(views).forEach(([name, el]) => { el.hidden = name !== tab.dataset.view; });
     if (tab.dataset.view === "config") loadConfig();
+    if (tab.dataset.view === "evals") loadEvals();
   });
 });
+
+// ---------- evals ----------
+const evalsList = $("#evals-list");
+const evalsEmpty = $("#evals-empty");
+
+function evalOutputPreview(opt) {
+  if (!opt.ok) return `<span class="eval-err">failed: ${escapeHtml(opt.error || "")}</span>`;
+  let text;
+  try { text = JSON.stringify(opt.output, null, 2); }
+  catch { text = String(opt.output); }
+  return `<pre class="eval-output">${escapeHtml(text)}</pre>`;
+}
+
+function evalStationCard(slug, st) {
+  const picked = st.pick;
+  const wrap = document.createElement("div");
+  wrap.className = "eval-station";
+  const sides = ["A", "B"].map((lbl) => {
+    const opt = st.options[lbl] || { ok: false, error: "missing" };
+    const isWinner = picked && picked.choice === lbl;
+    const providerTag = st.reveal ? `<span class="eval-provider">${escapeHtml(st.reveal[lbl])}</span>` : "";
+    return `
+      <div class="eval-side ${isWinner ? "winner" : ""}">
+        <div class="eval-side-head">
+          <span class="eval-label">${lbl}</span>
+          ${providerTag}
+          ${isWinner ? '<span class="chip good">winner</span>' : ""}
+        </div>
+        ${evalOutputPreview(opt)}
+        ${picked ? "" : `<button class="btn eval-pick" data-slug="${slug}" data-station="${st.station}" data-choice="${lbl}">Pick ${lbl}</button>`}
+      </div>`;
+  }).join("");
+  wrap.innerHTML = `
+    <div class="eval-station-head">
+      <h4>${escapeHtml(st.station)}</h4>
+      ${picked ? `<span class="muted">picked ${st.reveal[picked.choice]}</span>` : `<span class="muted">choose blind</span>`}
+    </div>
+    <div class="eval-sides">${sides}</div>`;
+  wrap.querySelectorAll(".eval-pick").forEach((b) => {
+    b.addEventListener("click", () => pickEval(b.dataset.slug, b.dataset.station, b.dataset.choice));
+  });
+  return wrap;
+}
+
+async function loadEvals() {
+  const res = await fetch("/api/evals");
+  const { evals } = await res.json();
+  evalsList.innerHTML = "";
+  evalsEmpty.hidden = evals.length > 0;
+  evals.forEach((run) => {
+    const block = document.createElement("div");
+    block.className = "eval-run";
+    const head = document.createElement("div");
+    head.className = "eval-run-head";
+    head.innerHTML = `<div class="eval-run-title">${escapeHtml(run.story_title)}</div><span class="muted">${escapeHtml(run.slug)}</span>`;
+    block.appendChild(head);
+    run.stations.forEach((st) => block.appendChild(evalStationCard(run.slug, st)));
+    evalsList.appendChild(block);
+  });
+}
+
+async function pickEval(slug, station, choice) {
+  await fetch(`/api/evals/${slug}/${station}/pick`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ choice }),
+  });
+  loadEvals();
+}
 
 // ---------- config page ----------
 const CHECKPOINT_LABELS = {
