@@ -13,4 +13,7 @@ video:
 video-topic:
 	$(PYTHON) -m pipeline.run --topic "$(TOPIC)"
 
-.PHONY: setup video video-topic
+dashboard:
+	$(PYTHON) -m uvicorn pipeline.ui.server:app --port 8420 --reload
+
+.PHONY: setup video video-topic dashboard

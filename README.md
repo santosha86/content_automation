@@ -56,9 +56,25 @@ Output lands in `output/review/<date>-<slug>/` with the .mp4 and platform-ready 
 
 Optional: drop royalty-free .mp3 tracks in `assets/music/` for an automatic background bed.
 
+## Dashboard
+
+A local control panel — no terminal needed day-to-day.
+
+```bash
+make dashboard        # http://localhost:8420
+```
+
+- **Generate** — trigger a new video (Scout picks the topic, or type one in), watch the run's log live
+- **Runs** — every video as a card: thumbnail, QA gate result, approval status
+- **Review** — click a card to play the video, read the YouTube/Instagram copy, see the QA checklist gap-by-gap, and Approve/Reject
+
 ## Roadmap
 
-- **Phase 1 (this)**: one-command video → review folder
-- **Phase 2**: AI avatar station (HeyGen), Telegram approval bot, auto-publish (YouTube Data API + Instagram Graph API)
+See the [Project Scope](https://claude.ai/code/artifact/46a0f7dc-6f98-4ebc-949b-8873beab5591) and [Delivery Plan](https://claude.ai/code/artifact/970c5149-11c0-4847-84f5-37c05b1eaddf) documents for the full picture.
+
+- **Phase 0 — done**: repo, environment, config-as-brain
+- **Phase 1 — done**: one-command video → review folder, QA-gated
+- **Phase 1.5 — done**: project docs + this dashboard
+- **Phase 2 — next**: AI avatar station (HeyGen), branded end-card, auto-publish (YouTube Data API + Instagram Graph API)
 - **Phase 3**: cloned voice + avatar, multiple formats, batch weekly production
-- **Phase 4**: analytics loop — Analyst agent reads YT/IG metrics, rewrites `style_guide.md`, A/B tests hooks
+- **Phase 4**: analytics loop — Analyst agent (Fable 5) reads YT/IG metrics, rewrites `style_guide.md`, A/B tests hooks

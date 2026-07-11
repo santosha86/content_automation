@@ -1,0 +1,267 @@
+const $ = (sel) => document.querySelector(sel);
+
+// ---------- theme ----------
+const themeToggle = $("#theme-toggle");
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem("signal-theme", t);
+}
+(function initTheme() {
+  const saved = localStorage.getItem("signal-theme");
+  if (saved) applyTheme(saved);
+})();
+themeToggle.addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme") ||
+    (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  applyTheme(current === "dark" ? "light" : "dark");
+});
+
+// ---------- generate ----------
+const topicInput = $("#topic-input");
+const urlField = $("#url-field");
+const urlInput = $("#url-input");
+const generateBtn = $("#generate-btn");
+const jobStatusEl = $("#job-status");
+const jobStatusText = $("#job-status-text");
+const jobSpinner = $("#job-spinner");
+const jobLog = $("#job-log");
+
+topicInput.addEventListener("input", () => {
+  urlField.hidden = topicInput.value.trim().length === 0;
+});
+
+let pollTimer = null;
+
+async function startGenerate() {
+  generateBtn.disabled = true;
+  const body = {};
+  if (topicInput.value.trim()) {
+    body.topic = topicInput.value.trim();
+    if (urlInput.value.trim()) body.article_url = urlInput.value.trim();
+  }
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.detail || "Could not start generation.");
+      generateBtn.disabled = false;
+      return;
+    }
+    const { job_id } = await res.json();
+    watchJob(job_id);
+  } catch (e) {
+    alert("Could not reach the dashboard server.");
+    generateBtn.disabled = false;
+  }
+}
+generateBtn.addEventListener("click", startGenerate);
+
+function renderJob(job) {
+  jobStatusEl.hidden = false;
+  jobLog.textContent = job.log.join("\n");
+  jobLog.scrollTop = jobLog.scrollHeight;
+  if (job.status === "running") {
+    jobSpinner.hidden = false;
+    jobStatusText.textContent = "Generating video…";
+    generateBtn.disabled = true;
+  } else if (job.status === "done") {
+    jobSpinner.hidden = true;
+    jobStatusText.textContent = "Done — video ready for review below.";
+    generateBtn.disabled = false;
+  } else {
+    jobSpinner.hidden = true;
+    jobStatusText.textContent = "Failed — see log below.";
+    generateBtn.disabled = false;
+  }
+}
+
+function watchJob(jobId) {
+  if (pollTimer) clearInterval(pollTimer);
+  let wasRunning = true;
+  pollTimer = setInterval(async () => {
+    const res = await fetch(`/api/jobs/${jobId}`);
+    if (!res.ok) { clearInterval(pollTimer); return; }
+    const job = await res.json();
+    renderJob(job);
+    if (job.status !== "running") {
+      clearInterval(pollTimer);
+      if (wasRunning) loadRuns();
+      wasRunning = false;
+    }
+  }, 1500);
+}
+
+async function resumeAnyJob() {
+  const res = await fetch("/api/jobs/latest");
+  const { job } = await res.json();
+  if (job && job.status === "running") watchJob(job.id);
+  else if (job) renderJob(job);
+}
+
+// ---------- runs grid ----------
+const runsGrid = $("#runs-grid");
+const runsCount = $("#runs-count");
+const emptyState = $("#empty-state");
+
+function qaBadge(report) {
+  if (!report) return { cls: "plain", label: "No QA" };
+  if (report.overall === "pass") return { cls: "good", label: "Pass" };
+  const failCount = (report.items || []).filter((i) => i.result === "fail").length;
+  return { cls: "bad", label: `${failCount} gap${failCount === 1 ? "" : "s"}` };
+}
+
+function statusChip(status) {
+  const map = {
+    approved: { cls: "good", label: "Approved" },
+    rejected: { cls: "bad", label: "Rejected" },
+    pending_review: { cls: "warn", label: "Pending" },
+  };
+  return map[status] || { cls: "plain", label: status || "unknown" };
+}
+
+function slugDate(slug) {
+  const m = slug.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
+}
+
+function runCard(run) {
+  const qa = qaBadge(run.review_report);
+  const st = statusChip(run.metadata.status);
+  const title = run.metadata.title || run.metadata.hook_text || run.slug;
+  const el = document.createElement("div");
+  el.className = "run-card";
+  el.innerHTML = `
+    <div class="run-thumb">
+      ${run.thumb_url ? `<img src="${run.thumb_url}" alt="">` : `<div class="no-thumb">No preview</div>`}
+      <span class="chip ${qa.cls} qa-badge">${qa.label}</span>
+    </div>
+    <div class="run-body">
+      <div class="run-title">${escapeHtml(title)}</div>
+      <div class="run-meta">
+        <span class="run-date">${slugDate(run.slug)}</span>
+        <span class="chip ${st.cls}">${st.label}</span>
+      </div>
+    </div>
+  `;
+  el.addEventListener("click", () => openDetail(run.slug));
+  return el;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function loadRuns() {
+  const res = await fetch("/api/runs");
+  const { runs } = await res.json();
+  runsGrid.innerHTML = "";
+  runsCount.textContent = runs.length ? `${runs.length} video${runs.length === 1 ? "" : "s"}` : "";
+  emptyState.hidden = runs.length > 0;
+  runs.forEach((r) => runsGrid.appendChild(runCard(r)));
+}
+
+// ---------- detail overlay ----------
+const overlay = $("#detail-overlay");
+const detailPanel = $("#detail-panel");
+
+function closeDetail() {
+  overlay.hidden = true;
+  detailPanel.innerHTML = "";
+}
+overlay.addEventListener("click", (e) => { if (e.target === overlay) closeDetail(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !overlay.hidden) closeDetail(); });
+
+function qaItemRow(item, checklistById) {
+  const spec = checklistById[item.id];
+  const label = spec ? spec.question : item.id;
+  return `
+    <div class="qa-item ${item.result}">
+      <span class="qa-id">${item.id}</span>
+      <div>
+        <div>${escapeHtml(label)}</div>
+        ${item.result === "fail" ? `<div class="qa-note">${escapeHtml(item.gap_note || "")}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+let _checklistById = null;
+async function getChecklistById() {
+  if (_checklistById) return _checklistById;
+  const res = await fetch("/api/checklist");
+  const { gate_b } = await res.json();
+  _checklistById = {};
+  gate_b.forEach((item) => { _checklistById[item.id] = item; });
+  return _checklistById;
+}
+
+async function openDetail(slug) {
+  const res = await fetch(`/api/runs/${slug}`);
+  if (!res.ok) return;
+  const run = await res.json();
+  const meta = run.metadata;
+  const report = run.review_report;
+  const checklistById = await getChecklistById();
+
+  const qaSection = report ? `
+    <div class="detail-block">
+      <h4>QA gate</h4>
+      <div class="qa-summary">
+        <span class="chip ${report.overall === "pass" ? "good" : "bad"}">${report.overall === "pass" ? "All checks passed" : "Blocked"}</span>
+      </div>
+      <div class="qa-list">
+        ${(report.items || []).map((i) => qaItemRow(i, checklistById)).join("")}
+      </div>
+    </div>
+  ` : `<div class="detail-block"><h4>QA gate</h4><div class="detail-text">Not graded (no ANTHROPIC_API_KEY at render time).</div></div>`;
+
+  detailPanel.innerHTML = `
+    <button class="detail-close" id="detail-close-btn" aria-label="Close">✕</button>
+    ${run.video_url ? `<div class="detail-video"><video src="${run.video_url}" controls playsinline></video></div>` : ""}
+    <h3 class="detail-title">${escapeHtml(meta.title || meta.hook_text || slug)}</h3>
+    <div class="detail-source"><a href="${meta.source_article}" target="_blank" rel="noopener">${escapeHtml(meta.source_article || "")}</a></div>
+
+    <div class="detail-block">
+      <h4>YouTube</h4>
+      <div class="detail-text"><strong>${escapeHtml(meta.youtube?.title || "")}</strong>\n\n${escapeHtml(meta.youtube?.description || "")}</div>
+    </div>
+    <div class="detail-block">
+      <h4>Instagram caption</h4>
+      <div class="detail-text">${escapeHtml(meta.instagram?.caption || "")}</div>
+    </div>
+
+    ${qaSection}
+
+    <div class="detail-actions">
+      <button class="btn btn-good" id="approve-btn">Approve</button>
+      <button class="btn btn-bad" id="reject-btn">Reject</button>
+    </div>
+    <div class="status-note">Current status: <strong>${meta.status}</strong></div>
+  `;
+
+  $("#detail-close-btn").addEventListener("click", closeDetail);
+  $("#approve-btn").addEventListener("click", () => setStatus(slug, "approved"));
+  $("#reject-btn").addEventListener("click", () => setStatus(slug, "rejected"));
+
+  overlay.hidden = false;
+}
+
+async function setStatus(slug, status) {
+  await fetch(`/api/runs/${slug}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  closeDetail();
+  loadRuns();
+}
+
+// ---------- init ----------
+loadRuns();
+resumeAnyJob();

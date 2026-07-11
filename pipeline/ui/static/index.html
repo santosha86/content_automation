@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal — Content Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">●</span>
+      <div>
+        <div class="brand-name">SIGNAL</div>
+        <div class="brand-sub">Content factory control panel</div>
+      </div>
+    </div>
+    <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  </header>
+
+  <main class="page">
+
+    <section class="generate-panel" id="generate-panel">
+      <div class="generate-row">
+        <div class="generate-fields">
+          <label class="field">
+            <span class="field-label">Topic <span class="optional">(optional — leave blank and Scout picks today's best story)</span></span>
+            <input type="text" id="topic-input" placeholder="e.g. Apple sues OpenAI over trade secret theft">
+          </label>
+          <label class="field" id="url-field" hidden>
+            <span class="field-label">Source URL <span class="optional">(optional)</span></span>
+            <input type="text" id="url-input" placeholder="https://...">
+          </label>
+        </div>
+        <button id="generate-btn" class="btn btn-primary">Generate video</button>
+      </div>
+      <div class="job-status" id="job-status" hidden>
+        <div class="job-status-head">
+          <span class="spinner" id="job-spinner"></span>
+          <span id="job-status-text">Running…</span>
+        </div>
+        <pre class="job-log" id="job-log"></pre>
+      </div>
+    </section>
+
+    <section class="runs-section">
+      <div class="section-head">
+        <h2>Runs</h2>
+        <span class="muted" id="runs-count"></span>
+      </div>
+      <div class="runs-grid" id="runs-grid"></div>
+      <div class="empty-state" id="empty-state" hidden>
+        <p>No videos yet. Generate your first one above.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="overlay" id="detail-overlay" hidden>
+    <div class="detail-panel" id="detail-panel"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
