@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-from . import imagegen
+from . import imagegen, screencap
 from .util import ffmpeg_bin, run_cmd, settings
 
 FALLBACK_COLORS = ["0x1a1a2e", "0x16213e", "0x0f3460", "0x1f1d36", "0x222831", "0x27374d"]
@@ -57,14 +57,26 @@ def _still_to_clip(img: Path, seconds: float, out: Path) -> None:
              "-vf", fit, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out)])
 
 
-def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: bool) -> None:
-    """Fetch one clip for a shot: FLUX still -> Pexels stock -> gradient."""
-    if shot.get("source") == "generated_image":
-        img = imagegen.generate(shot, out.with_suffix(".png"))
+def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: bool, story_seed: str = "") -> None:
+    """Fetch one clip for a shot: screenshot -> FLUX still -> Pexels stock -> gradient."""
+    # Type-A "real proof": screenshot the actual page the Director pointed at.
+    if shot.get("source") == "screen_capture":
+        shot_url = (shot.get("query") or "").strip()
+        img = screencap.capture(shot_url, out.with_suffix(".png"))
         if img:
             _still_to_clip(img, seconds, out)
             return
-    query = (shot.get("query") or shot.get("must_show") or "").strip()
+        print(f"  [visuals] screen_capture missed ('{shot_url}') — falling back")
+    if shot.get("source") == "generated_image":
+        img = imagegen.generate(shot, out.with_suffix(".png"), story_seed=story_seed)
+        if img:
+            _still_to_clip(img, seconds, out)
+            return
+    # A screen_capture shot's `query` is a URL — never search stock with it; use must_show.
+    if shot.get("source") == "screen_capture":
+        query = (shot.get("must_show") or "").strip()
+    else:
+        query = (shot.get("query") or shot.get("must_show") or "").strip()
     if use_pexels and query:
         try:
             if _pexels(query, out):
@@ -80,6 +92,9 @@ def gather(script: dict, seg_durations: list[float], run_dir: Path) -> list[list
     if not use_pexels:
         print("  [visuals] no PEXELS_API_KEY — using generated backgrounds")
     print(f"  [visuals] image-gen: {imagegen.status()}")
+    print(f"  [visuals] screenshots: {screencap.status()}")
+    # Stable per-video salt so cached stills stay unique across videos (no repetition).
+    story_seed = (script.get("topic", {}).get("title", "") or script.get("hook_text", ""))[:80]
     per_seg = []
     for i, seg in enumerate(script["segments"]):
         shots = seg.get("shots") or [{"source": "broll_video", "query": seg.get("broll_query", ""),
@@ -87,7 +102,8 @@ def gather(script: dict, seg_durations: list[float], run_dir: Path) -> list[list
         clips = []
         for j, shot in enumerate(shots):
             out = run_dir / f"shot_{i:02d}_{j:02d}.mp4"
-            _shot_clip(shot, seed=i * 7 + j, seconds=seg_durations[i] + 0.5, out=out, use_pexels=use_pexels)
+            _shot_clip(shot, seed=i * 7 + j, seconds=seg_durations[i] + 0.5, out=out,
+                       use_pexels=use_pexels, story_seed=story_seed)
             clips.append(out)
         per_seg.append(clips)
         print(f"  [visuals] segment {i}: {len(clips)} shot(s)")

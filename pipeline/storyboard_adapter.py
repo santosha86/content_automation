@@ -15,6 +15,29 @@ from . import shots as shotplan
 from .util import llm_json, style_guide
 
 
+# Realism guardrails applied to EVERY generated image, regardless of what the Director
+# wrote — the single biggest lever on "looks filmed" vs "looks AI". Prefix forces a
+# photographic anchor; the baseline negatives ban the vocabulary that reads as AI art.
+_REALISM_PREFIX = "Photorealistic candid photo, natural light, real-world documentary look,"
+_BASELINE_NEG = ("glowing, holographic, neon, cinematic teal and orange, 3d render, cgi, "
+                 "digital art, illustration, concept art, surreal, deformed hands, extra "
+                 "fingers, embedded text, watermark, logo, oversaturated, plastic skin")
+
+
+def _realism_prompt(prompt: str) -> str:
+    """Prepend the photographic anchor unless the prompt already opens photographic."""
+    low = prompt.lower()
+    if low.startswith(("photo", "photorealistic", "candid", "documentary", "smartphone")):
+        return prompt
+    return f"{_REALISM_PREFIX} {prompt}".strip()
+
+
+def _merge_neg(existing: str) -> str:
+    have = {n.strip().lower() for n in (existing or "").split(",") if n.strip()}
+    extra = [n for n in _BASELINE_NEG.split(", ") if n.lower() not in have]
+    return ", ".join(filter(None, [existing.strip(", ") if existing else "", ", ".join(extra)])).strip(", ")
+
+
 def _broll_query(beat: dict) -> str:
     """Best stock-search query for a beat, even when the Director planned a generated
     image (FLUX gen isn't wired yet — fall back to must_show, then the narration)."""
@@ -68,8 +91,9 @@ def to_script(storyboard: dict) -> dict:
         for s in planned:
             if s["source"] == "generated_image" and s.get("prompt"):
                 cont = concept.get("continuity", "")
-                s["prompt"] = f"{cont} {s['prompt']}".strip() if cont else s["prompt"]
-                s["negative_prompt"] = concept.get("negative_prompt", "")
+                body = f"{cont} {s['prompt']}".strip() if cont else s["prompt"]
+                s["prompt"] = _realism_prompt(body)
+                s["negative_prompt"] = _merge_neg(concept.get("negative_prompt", ""))
         segments.append({
             "voiceover": b["narration"],
             "emotion": b.get("emotion", "confident"),

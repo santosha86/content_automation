@@ -18,7 +18,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .util import settings
+from .util import ROOT, settings
+
+# Generated stills are the slowest step (~90s each). Cache them keyed by
+# prompt+negative+story_seed so re-rendering a video (new music/captions/voice) reuses the
+# exact images instead of paying the 30-min gen again. The story_seed keeps the key
+# per-video, so the SAME prompt in two different videos still generates two different
+# images (no cross-video repetition) while a re-render of one video is a clean cache hit.
+CACHE_DIR = ROOT / "state" / "img_cache"
 
 # Local text-to-image model for generated_image beats. `schnell` is best-known but its
 # HF repo is gated (needs `huggingface-cli login` + license accept). `z-image-turbo` and
@@ -87,17 +94,31 @@ def _flux_generate(prompt: str, negative: str, out_png: Path, seed: int) -> bool
     return proc.returncode == 0 and out_png.exists()
 
 
-def generate(shot: dict, out_png: Path) -> Path | None:
+def _cache_path(prompt: str, neg: str, story_seed: str) -> Path:
+    key = hashlib.sha1(f"{prompt}|{neg}|{story_seed}".encode()).hexdigest()[:20]
+    return CACHE_DIR / f"{key}.png"
+
+
+def generate(shot: dict, out_png: Path, story_seed: str = "") -> Path | None:
     """Generate a still for a shot, or None if no local generator / it fails
-    (caller then falls back to stock or a gradient). Seeds off the prompt so shots
-    differ; retries with a new seed if the output looks like noise."""
+    (caller then falls back to stock or a gradient). Seeds off prompt+story so shots
+    differ across videos; retries with a new seed if the output looks like noise.
+    Cached by prompt+negative+story_seed — a re-render is an instant cache hit."""
     prompt = (shot.get("prompt") or "").strip()
     if not prompt or not _flux_available():
         return None
     neg = (shot.get("negative_prompt") or "").strip()
-    base = int(hashlib.sha1(prompt.encode()).hexdigest(), 16) % 100000
+    cached = _cache_path(prompt, neg, story_seed)
+    if cached.exists() and not _looks_like_noise(cached):
+        shutil.copyfile(cached, out_png)
+        print("  [imagegen] cache hit — reused still (no re-gen)")
+        return out_png
+    # story_seed salts the generation seed so identical prompts in different videos diverge.
+    salt = int(hashlib.sha1(f"{prompt}|{story_seed}".encode()).hexdigest(), 16) % 100000
     for attempt in range(3):
-        if _flux_generate(prompt, neg, out_png, seed=base + attempt) and not _looks_like_noise(out_png):
+        if _flux_generate(prompt, neg, out_png, seed=salt + attempt) and not _looks_like_noise(out_png):
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(out_png, cached)  # store for re-render reuse
             return out_png
         print(f"  [imagegen] attempt {attempt + 1} produced no/degenerate image, retrying with a new seed")
     return None  # give up -> caller falls back to stock/gradient

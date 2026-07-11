@@ -82,6 +82,31 @@ STRATEGY (b-roll must show the subject, not the theme):
 Design ONE continuous visual concept (a single authored idea carrying the whole video,
 not a slideshow), and for EACH beat a visual + composition that serves it.
 
+REALISM IS THE #1 RULE — footage must look SHOT ON A CAMERA, never AI-generated. The whole
+video fails the moment a frame looks synthetic/fancy. So every generated_image prompt must
+read like a real photograph of an ordinary scene:
+  - Lead every prompt with a realism anchor: "Photorealistic candid photo, natural light,"
+    (or "documentary photo", "smartphone photo", "over-the-shoulder shot"). Shoot mundane,
+    believable, everyday scenes — a real desk, a real screen, a real office, real hands
+    typing — the kind of B-roll a human editor would film.
+  - BANNED vocabulary (these are what SCREAM "AI art" — never use them): glowing, holographic,
+    translucent, neon, futuristic, sci-fi, cyberpunk, neural core, floating UI, particle
+    effects, energy, aura, cinematic teal-and-orange, 3D render, digital art, concept art,
+    surreal, hyper-detailed, octane, unreal engine.
+  - Bias toward SCENES and OBJECTS and over-the-shoulder framing. AVOID close-up faces and
+    close-up hands — those carry the worst AI tells (bad fingers, uncanny eyes). A laptop on
+    a desk beats a person's face; a screen beats a portrait.
+
+A/B ROUTING — prefer REAL PROOF over generation when it exists:
+  - If a beat references something with a real, screenshottable web page — a GitHub repo, a
+    product/company site, a benchmark chart, a launch blog post, a news article — set that
+    shot's source to "screen_capture" and put the exact URL in its `query`. A real screenshot
+    of the actual thing is always more credible than any generated frame. Use the TOPIC
+    source_url ({scaffold['topic']['source_url'] or '(none)'}) when the beat is about the announcement itself.
+  - Only fall back to "generated_image" (a realistic photo, per the rules above) for abstract
+    beats where no real artifact can be shown — a feeling, a metaphor, a generic action.
+  - Use "broll_video" for generic motion (typing, city, servers) that stock footage covers.
+
 CRUCIAL — cut with the words: split each beat's narration into 1-3 short PHRASES and give
 each phrase its own shot whose imagery shows THAT phrase's concrete subject. This is what
 keeps images in sync with the script and makes the cut rhythm feel human (every ~2-4s), not
@@ -94,8 +119,8 @@ Reply with JSON only:
   "concept": {{
     "metaphor": "<one continuous visual idea>",
     "escalation": "<how the imagery evolves across beats with the stakes>",
-    "continuity": "<exact recurring character/object/style, prepended to every image prompt>",
-    "negative_prompt": "<global negatives: deformed anatomy, embedded text, logos, watermarks...>"
+    "continuity": "<a REALISTIC recurring style anchor prepended to every image prompt — e.g. 'Photorealistic candid photography, natural daylight, muted real-world colors, shallow depth of field'. No fancy/sci-fi words.>",
+    "negative_prompt": "<global negatives — always include these AI-art tells: glowing, holographic, neon, cinematic, 3d render, cgi, digital art, illustration, deformed hands, extra fingers, embedded text, logos, watermarks, oversaturated, plastic skin>"
   }},
   "beats": [
     {{
