@@ -197,17 +197,19 @@ def assemble(script: dict, seg_audio: list[Path], seg_video: list[list[Path]], r
     flash_t = bounds[0][1]
     vfilter = (f"ass='{subs}',"
                f"eq=brightness=0.85:enable='between(t,{flash_t:.2f},{flash_t + FLASH_LEN:.2f})'")
+    # +faststart moves the moov atom to the front so players/previews and the YouTube/IG
+    # uploaders can start before the whole file loads; -ac 2 gives IG the stereo it prefers.
+    tail = ["-c:v", "libx264", "-preset", "medium", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-movflags", "+faststart",
+            "-shortest", str(final)]
     if music:
         vol = settings()["music"]["volume"]
         run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
                  "-stream_loop", "-1", "-i", str(music),
                  "-filter_complex",
                  f"[0:v]{vfilter}[v];[2:a]volume={vol}[m];[1:a][m]amix=inputs=2:duration=first:normalize=0[a]",
-                 "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "medium",
-                 "-crf", "20", "-c:a", "aac", "-b:a", "192k", "-shortest", str(final)])
+                 "-map", "[v]", "-map", "[a]", *tail])
     else:
         run_cmd([ff, "-y", "-i", str(concat), "-i", str(voiceover),
-                 "-vf", vfilter, "-map", "0:v", "-map", "1:a",
-                 "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                 "-c:a", "aac", "-b:a", "192k", "-shortest", str(final)])
+                 "-vf", vfilter, "-map", "0:v", "-map", "1:a", *tail])
     return final
