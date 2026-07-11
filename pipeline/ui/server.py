@@ -204,6 +204,46 @@ def set_config(body: dict):
 
 
 from ..checkpoints import PENDING, DECISION  # noqa: E402
+from .. import evalharness  # noqa: E402
+
+
+@app.get("/api/evals")
+def list_evals():
+    """Every eval run's blind A/B records. Provider names are stripped from options
+    so the pick stays blind; `_reveal` is only exposed once a pick is recorded."""
+    if not evalharness.EVAL_DIR.exists():
+        return {"evals": []}
+    out = []
+    for run in sorted(evalharness.EVAL_DIR.iterdir(), reverse=True):
+        idx_path = run / "index.json"
+        if not idx_path.exists():
+            continue
+        idx = json.loads(idx_path.read_text())
+        stations = []
+        for station in idx.get("stations", []):
+            rec = json.loads((run / f"{station}.json").read_text())
+            picked = rec.get("pick")
+            stations.append({
+                "station": station,
+                "options": {k: {"ok": v["ok"], "output": v.get("output"), "error": v.get("error")}
+                            for k, v in rec["options"].items()},
+                "pick": picked,
+                # reveal only after a pick is recorded
+                "reveal": rec["_reveal"] if picked else None,
+            })
+        out.append({"slug": idx["slug"], "story_title": idx["story_title"], "stations": stations})
+    return {"evals": out}
+
+
+@app.post("/api/evals/{slug}/{station}/pick")
+def pick_eval(slug: str, station: str, body: dict):
+    choice = body.get("choice")
+    if choice not in ("A", "B"):
+        raise HTTPException(400, "choice must be 'A' or 'B'")
+    try:
+        return evalharness.record_pick(slug, station, choice)
+    except FileNotFoundError:
+        raise HTTPException(404, "eval not found")
 
 
 @app.get("/api/checkpoint")
