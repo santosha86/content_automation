@@ -8,8 +8,12 @@ video:
 
 # Voice
 voice:
-  # eleven_v3 = emotional delivery via audio tags ([excited], [curious]...).
-  # Fall back to eleven_multilingual_v2 if v3 is unavailable on your plan.
+  # kokoro = free local TTS, runs on your Mac, no API cost (default).
+  # elevenlabs = paid API with emotional audio tags — set provider: elevenlabs and add
+  # ELEVENLABS_API_KEY to .env to use it instead.
+  provider: kokoro
+  kokoro_voice: am_michael    # energetic US male narrator; try am_puck / af_heart / am_adam
+  # used only when provider: elevenlabs. eleven_v3 = audio tags ([excited], [curious]...).
   model: eleven_v3
 
 # Captions

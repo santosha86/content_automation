@@ -62,6 +62,20 @@ def _export_metadata(video: Path, slug: str) -> dict:
     }
 
 
+def _parse_caption_cues(subs: Path) -> list[dict]:
+    """One entry per Caption-style dialogue line, with an explicit word_count
+    so B3 grading doesn't have to eyeball adjacent short cues in raw ASS text."""
+    cues = []
+    for line in subs.read_text().splitlines():
+        if not line.startswith("Dialogue: 0,") or ",Caption,,0,0,0,," not in line:
+            continue
+        head, text = line.split(",Caption,,0,0,0,,", 1)
+        _, start, end, *_ = head.split(",")
+        clean = re.sub(r"\{[^}]*\}", "", text).strip()
+        cues.append({"start": start, "end": end, "text": clean, "word_count": len(clean.split())})
+    return cues
+
+
 def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str) -> dict | None:
     if not os.getenv("ANTHROPIC_API_KEY"):
         print("  [reviewer] no ANTHROPIC_API_KEY — skipping QA gate")
@@ -73,10 +87,10 @@ def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str)
     system = (ROOT / "reviewer-agent.prompt.md").read_text()
 
     subs = run_dir / "subs.ass"
-    captions = subs.read_text() if subs.exists() else "caption file missing"
+    caption_cues = _parse_caption_cues(subs) if subs.exists() else "caption file missing"
     payload = {
         "checklist": gate_b,
-        "caption_file": captions[-6000:],
+        "caption_file": caption_cues,
         "audio_meta": _silence_report(video),
         "export_metadata": _export_metadata(video, slug),
         "script_context": {
@@ -102,12 +116,13 @@ def grade(video: Path, run_dir: Path, review_dir: Path, script: dict, slug: str)
     for attempt_model in [model, FALLBACK_MODEL]:
         try:
             msg = client.messages.create(
-                model=attempt_model, max_tokens=2000, system=system,
+                model=attempt_model, max_tokens=4096, system=system,
+                output_config={"effort": "low"},
                 messages=[{"role": "user", "content": content}],
             )
             if msg.stop_reason == "refusal":
                 continue  # refusal -> fall back to next model per reviewer prompt
-            text = msg.content[0].text
+            text = "".join(b.text for b in msg.content if b.type == "text")
             m = re.search(r"\{.*\}", text, re.DOTALL)
             report = json.loads(m.group(0))
             break

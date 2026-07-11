@@ -1,13 +1,28 @@
-"""Voice: per-segment TTS. ElevenLabs when key present, macOS `say` fallback for testing."""
+"""Voice: per-segment TTS. Kokoro (free, local) by default; ElevenLabs when
+voice.provider: elevenlabs is set; macOS `say` as last-resort fallback."""
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import requests
 
-from .util import ffmpeg_bin, run_cmd, settings
+from .util import ROOT, ffmpeg_bin, run_cmd, settings
 
-# v3 audio tags per script emotion
+MODELS_DIR = ROOT / "assets" / "models"
+_KOKORO = None  # lazy singleton — loading the ONNX model is slow
+
+# Kokoro has no emotion tags; approximate emotional arc via delivery speed.
+KOKORO_SPEED = {
+    "excited": 1.12,
+    "urgent": 1.15,
+    "amazed": 1.08,
+    "curious": 1.0,
+    "confident": 1.0,
+    "serious": 0.92,
+}
+
+# ElevenLabs v3 audio tags per script emotion
 EMOTION_TAGS = {
     "excited": "[excited]",
     "curious": "[curious]",
@@ -27,6 +42,32 @@ V2_SETTINGS = {
 }
 
 
+def _kokoro():
+    global _KOKORO
+    if _KOKORO is None:
+        from kokoro_onnx import Kokoro
+        onnx = MODELS_DIR / "kokoro-v1.0.onnx"
+        voices = MODELS_DIR / "voices-v1.0.bin"
+        if not (onnx.exists() and voices.exists()):
+            raise RuntimeError(
+                f"Kokoro model files missing in {MODELS_DIR} — "
+                "download kokoro-v1.0.onnx and voices-v1.0.bin from the kokoro-onnx releases page."
+            )
+        _KOKORO = Kokoro(str(onnx), str(voices))
+    return _KOKORO
+
+
+def _kokoro_tts(text: str, emotion: str, out_mp3: Path) -> None:
+    import soundfile as sf
+    voice = settings().get("voice", {}).get("kokoro_voice", "am_michael")
+    speed = KOKORO_SPEED.get(emotion, 1.0)
+    samples, sample_rate = _kokoro().create(text, voice=voice, speed=speed, lang="en-us")
+    wav = out_mp3.with_suffix(".wav")
+    sf.write(str(wav), samples, sample_rate)
+    run_cmd([ffmpeg_bin(), "-y", "-i", str(wav), "-ar", "44100", str(out_mp3)])
+    wav.unlink()
+
+
 def _elevenlabs(text: str, emotion: str, out_mp3: Path) -> None:
     voice_id = os.getenv("ELEVENLABS_VOICE_ID", "nPczCjzI2devNBz1zQrb")
     model = settings().get("voice", {}).get("model", "eleven_v3")
@@ -40,23 +81,30 @@ def _elevenlabs(text: str, emotion: str, out_mp3: Path) -> None:
             "model_id": model,
             "voice_settings": {**vs, "similarity_boost": 0.75, "speed": 1.05},
         }
-    resp = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
-        json=body,
-        params={"output_format": "mp3_44100_128"},
-        timeout=120,
-    )
+    for attempt in range(3):
+        resp = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+            headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
+            json=body,
+            params={"output_format": "mp3_44100_128"},
+            timeout=120,
+        )
+        if resp.ok:
+            out_mp3.write_bytes(resp.content)
+            return
+        if attempt < 2:
+            print(f"  [voice] elevenlabs {resp.status_code}, retrying...")
+            time.sleep(3 * (attempt + 1))
     resp.raise_for_status()
-    out_mp3.write_bytes(resp.content)
 
 
 def _trim_silence(mp3: Path) -> None:
-    """Cut dead air from both ends of a segment (SOP: trim blank spaces from the voiceover)."""
+    """Cut dead air from edges AND mid-sentence pauses (SOP: trim blank spaces from the voiceover)."""
     edge = "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08"
+    interior = "silenceremove=stop_periods=-1:stop_threshold=-45dB:stop_silence=0.35"
     tmp = mp3.with_suffix(".trim.mp3")
     run_cmd([ffmpeg_bin(), "-y", "-i", str(mp3),
-             "-af", f"{edge},areverse,{edge},areverse", str(tmp)])
+             "-af", f"{edge},areverse,{edge},areverse,{interior}", str(tmp)])
     tmp.replace(mp3)
 
 
@@ -69,14 +117,23 @@ def _macos_say(text: str, out_mp3: Path) -> None:
 
 def synthesize(script: dict, run_dir: Path) -> list[Path]:
     """One audio file per segment; returns paths in order."""
-    use_eleven = bool(os.getenv("ELEVENLABS_API_KEY"))
-    if not use_eleven:
-        print("  [voice] no ELEVENLABS_API_KEY — using macOS `say` (test quality)")
+    provider = settings().get("voice", {}).get("provider", "kokoro")
+    if provider == "elevenlabs" and not os.getenv("ELEVENLABS_API_KEY"):
+        print("  [voice] provider=elevenlabs but no ELEVENLABS_API_KEY — falling back to kokoro")
+        provider = "kokoro"
+    print(f"  [voice] provider: {provider}")
     paths = []
     for i, seg in enumerate(script["segments"]):
         out = run_dir / f"seg_{i:02d}.mp3"
-        if use_eleven:
-            _elevenlabs(seg["voiceover"], seg.get("emotion", ""), out)
+        emotion = seg.get("emotion", "")
+        if provider == "elevenlabs":
+            _elevenlabs(seg["voiceover"], emotion, out)
+        elif provider == "kokoro":
+            try:
+                _kokoro_tts(seg["voiceover"], emotion, out)
+            except Exception as e:
+                print(f"  [voice] kokoro failed ({e}), falling back to macOS say")
+                _macos_say(seg["voiceover"], out)
         else:
             _macos_say(seg["voiceover"], out)
         _trim_silence(out)

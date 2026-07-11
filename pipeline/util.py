@@ -48,7 +48,7 @@ def media_duration(path: Path) -> float:
     return float(proc.stdout.strip())
 
 
-def llm(prompt: str, system: str = "", max_tokens: int = 4000) -> str:
+def llm(prompt: str, system: str = "", max_tokens: int = 8000) -> str:
     provider = os.getenv("LLM_PROVIDER", "anthropic")
     if provider == "anthropic" and os.getenv("ANTHROPIC_API_KEY"):
         import anthropic
@@ -57,9 +57,10 @@ def llm(prompt: str, system: str = "", max_tokens: int = 4000) -> str:
             model=os.getenv("LLM_MODEL", "claude-sonnet-5"),
             max_tokens=max_tokens,
             system=system or "You are a precise assistant.",
+            output_config={"effort": "medium"},
             messages=[{"role": "user", "content": prompt}],
         )
-        return msg.content[0].text
+        return "".join(b.text for b in msg.content if b.type == "text")
     # local fallback
     resp = requests.post(
         "http://localhost:11434/api/chat",

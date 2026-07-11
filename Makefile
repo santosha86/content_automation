@@ -1,14 +1,16 @@
 export PATH := $(HOME)/.local/bin:$(PATH)
+CONDA_ENV := /Users/santosh_work/Work/Development/Environments/content_automation_env
+PYTHON := $(CONDA_ENV)/bin/python
 
 setup:
-	uv sync
-	cp -n .env.example .env || true
-	@echo "Now edit .env with your API keys."
+	conda create --prefix $(CONDA_ENV) python=3.11 -y
+	$(PYTHON) -m pip install -r requirements.txt
+	@echo "Now edit .env with your API keys (see README)."
 
 video:
-	uv run python -m pipeline.run
+	$(PYTHON) -m pipeline.run
 
 video-topic:
-	uv run python -m pipeline.run --topic "$(TOPIC)"
+	$(PYTHON) -m pipeline.run --topic "$(TOPIC)"
 
 .PHONY: setup video video-topic

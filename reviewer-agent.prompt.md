@@ -18,6 +18,11 @@ beyond the checklist, and do not re-teach items that passed.
   `fail` with a gap_note asking for the missing input — never guess a pass.
 - Use vision on the keyframes for B1, B2, B4, B6, B7, B8; use `caption_file` for B3; use
   `audio_meta` for B5; use `export_metadata` for B9.
+- `caption_file` is a pre-parsed JSON array of caption cues, one per speech-synced Caption-style
+  line, each with an explicit `word_count` field. For B3, trust `word_count` directly — do not
+  re-count words from `text`, and do not merge adjacent cues into one phrase. Each array entry is
+  already one on-screen caption card; B3 fails only if an individual entry's `word_count` is
+  outside 2-4.
 - Keep gap_note to one actionable sentence (what's wrong + the fix).
 
 ## Output — return ONLY this JSON, nothing else
