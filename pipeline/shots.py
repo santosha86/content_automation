@@ -29,6 +29,7 @@ def plan_from_beat(beat: dict) -> list[dict]:
             "prompt": s.get("prompt") or visual.get("prompt", ""),
             "must_show": s.get("must_show", ""),
             "camera": s.get("camera", "zoom_in"),
+            "motion": bool(s.get("motion", False)),
             "weight": _weight(s.get("phrase", s.get("query", "x"))),
         })
     if not out:

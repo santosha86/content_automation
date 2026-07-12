@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-from . import imagegen, screencap
+from . import imagegen, screencap, videogen
 from .util import ffmpeg_bin, run_cmd, settings
 
 FALLBACK_COLORS = ["0x1a1a2e", "0x16213e", "0x0f3460", "0x1f1d36", "0x222831", "0x27374d"]
@@ -70,7 +70,8 @@ def _realistic_shot_from(shot: dict) -> dict:
     }
 
 
-def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: bool, story_seed: str = "") -> None:
+def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: bool,
+               story_seed: str = "", motion_budget: list = None) -> None:
     """Fetch one clip for a shot: screenshot -> FLUX still -> Pexels stock -> gradient."""
     # Type-A "real proof": screenshot the actual page the Director pointed at.
     if shot.get("source") == "screen_capture":
@@ -90,6 +91,14 @@ def _shot_clip(shot: dict, seed: int, seconds: float, out: Path, use_pexels: boo
     if shot.get("source") == "generated_image":
         img = imagegen.generate(shot, out.with_suffix(".png"), story_seed=story_seed)
         if img:
+            # Motion tier (opt-in, paid): animate the realistic still for the 1-2 shots the
+            # Director flagged, within the per-video budget. Falls back to the still on any
+            # failure, so nothing breaks if fal.ai is off/errors.
+            if shot.get("motion") and motion_budget and motion_budget[0] > 0 and videogen.available():
+                clip = videogen.generate(shot, img, out, seconds)
+                if clip:
+                    motion_budget[0] -= 1
+                    return
             _still_to_clip(img, seconds, out)
             return
     # A screen_capture shot's `query` is a URL — never search stock with it; use must_show.
@@ -113,8 +122,12 @@ def gather(script: dict, seg_durations: list[float], run_dir: Path) -> list[list
         print("  [visuals] no PEXELS_API_KEY — using generated backgrounds")
     print(f"  [visuals] image-gen: {imagegen.status()}")
     print(f"  [visuals] screenshots: {screencap.status()}")
+    print(f"  [visuals] motion video-gen: {videogen.status()}")
     # Stable per-video salt so cached stills stay unique across videos (no repetition).
     story_seed = (script.get("topic", {}).get("title", "") or script.get("hook_text", ""))[:80]
+    # Hard cap on paid motion clips per video (0 when video-gen is off => never spends).
+    max_motion = int(settings().get("videogen", {}).get("max_shots", 2)) if videogen.available() else 0
+    motion_budget = [max_motion]
     per_seg = []
     for i, seg in enumerate(script["segments"]):
         shots = seg.get("shots") or [{"source": "broll_video", "query": seg.get("broll_query", ""),
@@ -123,7 +136,7 @@ def gather(script: dict, seg_durations: list[float], run_dir: Path) -> list[list
         for j, shot in enumerate(shots):
             out = run_dir / f"shot_{i:02d}_{j:02d}.mp4"
             _shot_clip(shot, seed=i * 7 + j, seconds=seg_durations[i] + 0.5, out=out,
-                       use_pexels=use_pexels, story_seed=story_seed)
+                       use_pexels=use_pexels, story_seed=story_seed, motion_budget=motion_budget)
             clips.append(out)
         per_seg.append(clips)
         print(f"  [visuals] segment {i}: {len(clips)} shot(s)")

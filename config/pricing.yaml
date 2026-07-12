@@ -19,3 +19,5 @@ tts:  # USD per 1K characters
   elevenlabs: {per_1k_chars: 0.30}   # adjust to your ElevenLabs plan
 search:  # USD per request
   tavily: {per_request: 0.008}       # adjust to your Tavily plan
+videogen:  # USD per generated clip (fal.ai) — adjust to the model you pick
+  fal: {per_clip: 0.05}

@@ -147,7 +147,10 @@ Reply with JSON only:
             "query": "<stock query for this phrase's concrete subject>",
             "prompt": "<image-gen prompt if source=generated_image, else empty>",
             "must_show": "<the one thing this shot must show>",
-            "camera": "none|zoom_in|zoom_out|punch_in"
+            "camera": "none|zoom_in|zoom_out|punch_in",
+            "motion": <true ONLY for a shot that genuinely needs REAL movement — an action
+              happening, a process, motion the eye expects; else omit or false. Mark AT MOST
+              2 shots in the WHOLE video as motion:true — these are the ones worth animating.>"
           }}
         ]
       }},

@@ -39,6 +39,11 @@ music:
 virality:
   min_score: 55
 
+# Motion video-gen (fal.ai, opt-in paid tier). Only active when FAL_KEY is set AND
+# VIDEOGEN_ENABLED=1. max_shots caps paid clips per video (the Director flags which shots).
+videogen:
+  max_shots: 2
+
 # Branded end-card (reference rule: one reusable end-card, identical every video, last ~2s)
 branding:
   name: "SIGNAL"

@@ -181,6 +181,11 @@ def _price_record(rec: dict, pricing: dict):
         if not row:
             return None, False
         return rec.get("requests", 0) * row.get("per_request", 0), True
+    if kind == "videogen":
+        row = (pricing.get("videogen") or {}).get(rec.get("provider", ""))
+        if not row:
+            return None, False
+        return rec.get("requests", 0) * row.get("per_clip", 0), True
     return None, False
 
 

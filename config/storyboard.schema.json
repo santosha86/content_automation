@@ -1,41 +1,111 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Storyboard — the Director's contract",
+  "title": "Storyboard \u2014 the Director's contract",
   "description": "One storyboard per video. The Director plans it; Voice, Visuals, Editor and Reviewer execute it beat-by-beat and never invent outside it. This is the 'brain' artifact: every downstream station is replaceable as long as it honors this contract.",
   "type": "object",
-  "required": ["topic", "concept", "hook", "beats", "music", "cta"],
+  "required": [
+    "topic",
+    "concept",
+    "hook",
+    "beats",
+    "music",
+    "cta"
+  ],
   "properties": {
     "topic": {
       "type": "object",
-      "required": ["title", "source_url", "lane"],
+      "required": [
+        "title",
+        "source_url",
+        "lane"
+      ],
       "properties": {
-        "title": { "type": "string" },
-        "source_url": { "type": "string" },
-        "lane": { "type": "string", "enum": ["ai_news", "github_trending"], "description": "Content lane the Strategist picked this from." },
-        "name_anchor": { "type": "string", "description": "Famous name/brand the hook is anchored to (Sam Altman, Claude, Google...). Empty if none applies — never force one." },
-        "framing_notes": { "type": "string", "description": "How claims must be framed (e.g. 'reported consideration, not enacted policy'). Critic and Reviewer check the script against this." },
-        "sources": { "type": "array", "items": { "type": "string" }, "description": "URLs every factual claim traces to." }
+        "title": {
+          "type": "string"
+        },
+        "source_url": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string",
+          "enum": [
+            "ai_news",
+            "github_trending"
+          ],
+          "description": "Content lane the Strategist picked this from."
+        },
+        "name_anchor": {
+          "type": "string",
+          "description": "Famous name/brand the hook is anchored to (Sam Altman, Claude, Google...). Empty if none applies \u2014 never force one."
+        },
+        "framing_notes": {
+          "type": "string",
+          "description": "How claims must be framed (e.g. 'reported consideration, not enacted policy'). Critic and Reviewer check the script against this."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "URLs every factual claim traces to."
+        }
       }
     },
     "concept": {
       "type": "object",
-      "required": ["metaphor", "escalation"],
-      "description": "The visual through-line. Every beat's visual must serve it — one authored idea, not a slideshow of related clips.",
+      "required": [
+        "metaphor",
+        "escalation"
+      ],
+      "description": "The visual through-line. Every beat's visual must serve it \u2014 one authored idea, not a slideshow of related clips.",
       "properties": {
-        "metaphor": { "type": "string", "description": "One continuous visual idea carrying the video (e.g. 'a cat performing at a grand piano as the hall turns digital')." },
-        "escalation": { "type": "string", "description": "How the imagery evolves across beats in parallel with the narration's stakes (playful -> ominous, small -> global...)." },
-        "continuity": { "type": "string", "description": "Exact recurring character/object/style description prepended verbatim to every generated-image prompt so identity stays consistent across shots." },
-        "negative_prompt": { "type": "string", "description": "Global negative prompt for all generated images (deformed anatomy, inconsistent identity, embedded text, logos, watermarks...)." }
+        "metaphor": {
+          "type": "string",
+          "description": "One continuous visual idea carrying the video (e.g. 'a cat performing at a grand piano as the hall turns digital')."
+        },
+        "escalation": {
+          "type": "string",
+          "description": "How the imagery evolves across beats in parallel with the narration's stakes (playful -> ominous, small -> global...)."
+        },
+        "continuity": {
+          "type": "string",
+          "description": "Exact recurring character/object/style description prepended verbatim to every generated-image prompt so identity stays consistent across shots."
+        },
+        "negative_prompt": {
+          "type": "string",
+          "description": "Global negative prompt for all generated images (deformed anatomy, inconsistent identity, embedded text, logos, watermarks...)."
+        }
       }
     },
     "hook": {
       "type": "object",
-      "required": ["text", "variant_rank"],
+      "required": [
+        "text",
+        "variant_rank"
+      ],
       "properties": {
-        "type": { "type": "string", "enum": ["kinetic_text", "visual_spectacle"], "default": "kinetic_text", "description": "kinetic_text = word-by-word text hook. visual_spectacle = the concept's imagery is the scroll-stopper; text stays minimal." },
-        "text": { "type": "string", "description": "4-6 words, kinetic word-by-word buildable, no fabricated events." },
-        "variant_rank": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Which of the 3 generated variants was chosen (by you or by the agent when hook_pick=auto)." },
-        "rationale": { "type": "string" }
+        "type": {
+          "type": "string",
+          "enum": [
+            "kinetic_text",
+            "visual_spectacle"
+          ],
+          "default": "kinetic_text",
+          "description": "kinetic_text = word-by-word text hook. visual_spectacle = the concept's imagery is the scroll-stopper; text stays minimal."
+        },
+        "text": {
+          "type": "string",
+          "description": "4-6 words, kinetic word-by-word buildable, no fabricated events."
+        },
+        "variant_rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Which of the 3 generated variants was chosen (by you or by the agent when hook_pick=auto)."
+        },
+        "rationale": {
+          "type": "string"
+        }
       }
     },
     "beats": {
@@ -45,37 +115,131 @@
       "description": "Ordered narrative beats. Target total spoken length 30-40s.",
       "items": {
         "type": "object",
-        "required": ["id", "narration", "emotion", "visual", "composition"],
+        "required": [
+          "id",
+          "narration",
+          "emotion",
+          "visual",
+          "composition"
+        ],
         "properties": {
-          "id": { "type": "integer", "minimum": 1 },
-          "narration": { "type": "string", "description": "Exact voiceover text for this beat." },
-          "emotion": { "type": "string", "enum": ["excited", "curious", "serious", "amazed", "urgent", "confident"], "description": "Drives TTS delivery (speed/tags) and pacing. Never the same emotion twice in a row." },
-          "est_seconds": { "type": "number", "description": "Director's estimate; Editor trues it up from the rendered audio." },
-          "music_intensity": { "type": "integer", "minimum": 0, "maximum": 3, "description": "Music arc per beat: 0 = bed only, 3 = peak. Should rise with the narration's stakes, not sit flat." },
-          "overlay": { "type": "string", "description": "On-screen text chip for this beat, empty for none. Last beat's overlay is the CTA in Hook style (bookend rule B7)." },
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "narration": {
+            "type": "string",
+            "description": "Exact voiceover text for this beat."
+          },
+          "emotion": {
+            "type": "string",
+            "enum": [
+              "excited",
+              "curious",
+              "serious",
+              "amazed",
+              "urgent",
+              "confident"
+            ],
+            "description": "Drives TTS delivery (speed/tags) and pacing. Never the same emotion twice in a row."
+          },
+          "est_seconds": {
+            "type": "number",
+            "description": "Director's estimate; Editor trues it up from the rendered audio."
+          },
+          "music_intensity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Music arc per beat: 0 = bed only, 3 = peak. Should rise with the narration's stakes, not sit flat."
+          },
+          "overlay": {
+            "type": "string",
+            "description": "On-screen text chip for this beat, empty for none. Last beat's overlay is the CTA in Hook style (bookend rule B7)."
+          },
           "visual": {
             "type": "object",
-            "required": ["source"],
+            "required": [
+              "source"
+            ],
             "properties": {
-              "source": { "type": "string", "enum": ["broll_video", "broll_image", "generated_image", "face", "screen_capture"], "description": "broll_* = stock (Pexels). generated_image = FLUX local / Gemini ladder. face = presenter cam (clone/avatar later). screen_capture = product UI or repo page." },
-              "query": { "type": "string", "description": "Stock-search query, tightly tied to the narration's concrete subject — not the abstract theme." },
-              "prompt": { "type": "string", "description": "Image-generation prompt when source=generated_image." },
-              "must_show": { "type": "string", "description": "The one thing the frame must contain for the beat to make sense (proof rule B6)." },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "broll_video",
+                  "broll_image",
+                  "generated_image",
+                  "face",
+                  "screen_capture"
+                ],
+                "description": "broll_* = stock (Pexels). generated_image = FLUX local / Gemini ladder. face = presenter cam (clone/avatar later). screen_capture = product UI or repo page."
+              },
+              "query": {
+                "type": "string",
+                "description": "Stock-search query, tightly tied to the narration's concrete subject \u2014 not the abstract theme."
+              },
+              "prompt": {
+                "type": "string",
+                "description": "Image-generation prompt when source=generated_image."
+              },
+              "must_show": {
+                "type": "string",
+                "description": "The one thing the frame must contain for the beat to make sense (proof rule B6)."
+              },
               "shots": {
                 "type": "array",
                 "minItems": 1,
                 "maxItems": 3,
-                "description": "Ordered sub-shots so the visual CUTS WITH THE NARRATION (reference cuts every 2-4s) instead of one static clip per beat. Split the beat's narration into 1-3 phrases; each shot shows that phrase's concrete subject. Optional — a beat with no shots uses the single visual above. The Editor times each shot by its phrase's share of the beat.",
+                "description": "Ordered sub-shots so the visual CUTS WITH THE NARRATION (reference cuts every 2-4s) instead of one static clip per beat. Split the beat's narration into 1-3 phrases; each shot shows that phrase's concrete subject. Optional \u2014 a beat with no shots uses the single visual above. The Editor times each shot by its phrase's share of the beat.",
                 "items": {
                   "type": "object",
-                  "required": ["phrase", "must_show"],
+                  "required": [
+                    "phrase",
+                    "must_show"
+                  ],
                   "properties": {
-                    "phrase": { "type": "string", "description": "The exact words of the narration this shot covers — used to time the cut and to keep image and words in sync." },
-                    "source": { "type": "string", "enum": ["broll_video", "broll_image", "generated_image", "face", "screen_capture"], "default": "broll_video" },
-                    "query": { "type": "string", "description": "Stock-search query for this phrase's concrete subject." },
-                    "prompt": { "type": "string", "description": "Image-gen prompt when source=generated_image." },
-                    "must_show": { "type": "string", "description": "The one thing this shot must contain (proof rule B6)." },
-                    "camera": { "type": "string", "enum": ["none", "zoom_in", "zoom_out", "punch_in"], "default": "zoom_in", "description": "Ken-Burns move the Editor applies to this shot so stills/loops feel alive." }
+                    "phrase": {
+                      "type": "string",
+                      "description": "The exact words of the narration this shot covers \u2014 used to time the cut and to keep image and words in sync."
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "broll_video",
+                        "broll_image",
+                        "generated_image",
+                        "face",
+                        "screen_capture"
+                      ],
+                      "default": "broll_video"
+                    },
+                    "query": {
+                      "type": "string",
+                      "description": "Stock-search query for this phrase's concrete subject."
+                    },
+                    "prompt": {
+                      "type": "string",
+                      "description": "Image-gen prompt when source=generated_image."
+                    },
+                    "must_show": {
+                      "type": "string",
+                      "description": "The one thing this shot must contain (proof rule B6)."
+                    },
+                    "camera": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "zoom_in",
+                        "zoom_out",
+                        "punch_in"
+                      ],
+                      "default": "zoom_in",
+                      "description": "Ken-Burns move the Editor applies to this shot so stills/loops feel alive."
+                    },
+                    "motion": {
+                      "type": "boolean",
+                      "description": "Optional. Set true for the 1-2 shots per video that genuinely need REAL movement (an action happening, a process, motion the eye expects). When video-gen is enabled, these get an animated clip; otherwise they stay a still with Ken-Burns. Use sparingly."
+                    }
                   }
                 }
               }
@@ -83,11 +247,40 @@
           },
           "composition": {
             "type": "object",
-            "required": ["layout"],
+            "required": [
+              "layout"
+            ],
             "properties": {
-              "layout": { "type": "string", "enum": ["full", "split_face_bottom", "split_face_top", "pip_face"], "description": "split_face_bottom = b-roll top / face bottom (the default split). Max 3 layers total incl. captions (rule B4)." },
-              "camera": { "type": "string", "enum": ["none", "zoom_in", "zoom_out", "punch_in"], "default": "none", "description": "Slow Ken-Burns style move applied by the Editor." },
-              "transition_in": { "type": "string", "enum": ["cut", "flash"], "default": "cut", "description": "flash only at the hook->body cut (rule from creator teardown)." }
+              "layout": {
+                "type": "string",
+                "enum": [
+                  "full",
+                  "split_face_bottom",
+                  "split_face_top",
+                  "pip_face"
+                ],
+                "description": "split_face_bottom = b-roll top / face bottom (the default split). Max 3 layers total incl. captions (rule B4)."
+              },
+              "camera": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "zoom_in",
+                  "zoom_out",
+                  "punch_in"
+                ],
+                "default": "none",
+                "description": "Slow Ken-Burns style move applied by the Editor."
+              },
+              "transition_in": {
+                "type": "string",
+                "enum": [
+                  "cut",
+                  "flash"
+                ],
+                "default": "cut",
+                "description": "flash only at the hook->body cut (rule from creator teardown)."
+              }
             }
           }
         }
@@ -95,19 +288,53 @@
     },
     "music": {
       "type": "object",
-      "required": ["mood"],
+      "required": [
+        "mood"
+      ],
       "properties": {
-        "mood": { "type": "string", "enum": ["driving", "suspense", "uplift", "tech_minimal", "none"], "description": "Director picks from the curated royalty-free library in assets/music/<mood>/." },
-        "duck_under_voice": { "type": "boolean", "default": true, "description": "Loudness targets: narration ~-6dB peak, music -22 to -16dB under voice." },
-        "end_with_silence": { "type": "boolean", "default": true, "description": "Music stops on the final word; ~1s of silence so the CTA/question lands." }
+        "mood": {
+          "type": "string",
+          "enum": [
+            "driving",
+            "suspense",
+            "uplift",
+            "tech_minimal",
+            "none"
+          ],
+          "description": "Director picks from the curated royalty-free library in assets/music/<mood>/."
+        },
+        "duck_under_voice": {
+          "type": "boolean",
+          "default": true,
+          "description": "Loudness targets: narration ~-6dB peak, music -22 to -16dB under voice."
+        },
+        "end_with_silence": {
+          "type": "boolean",
+          "default": true,
+          "description": "Music stops on the final word; ~1s of silence so the CTA/question lands."
+        }
       }
     },
     "cta": {
       "type": "object",
-      "required": ["text"],
+      "required": [
+        "text"
+      ],
       "properties": {
-        "text": { "type": "string", "description": "3-5 punchy words, rendered as the final beat's overlay in Hook style." },
-        "ask": { "type": "string", "enum": ["follow", "comment", "share", "link"], "default": "follow" }
+        "text": {
+          "type": "string",
+          "description": "3-5 punchy words, rendered as the final beat's overlay in Hook style."
+        },
+        "ask": {
+          "type": "string",
+          "enum": [
+            "follow",
+            "comment",
+            "share",
+            "link"
+          ],
+          "default": "follow"
+        }
       }
     }
   }
