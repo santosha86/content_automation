@@ -340,6 +340,100 @@ def analyst_run(body: dict = None):
     return analyst.run(platform)
 
 
+@app.post("/api/analyst/apply")
+def analyst_apply(body: dict = None):
+    """Guarded apply: append an approved proposal to config/learnings.md (no code edits)."""
+    from .. import analyst
+    proposal = (body or {}).get("proposal") or body or {}
+    res = analyst.apply_proposal(proposal)
+    if not res.get("ok"):
+        raise HTTPException(400, res.get("error", "could not apply"))
+    return res
+
+
+# ---------------- content queue ----------------
+@app.get("/api/queue")
+def queue_list():
+    from .. import queue as q
+    return {"items": q.list_items()}
+
+
+@app.post("/api/queue")
+def queue_add(body: dict = None):
+    from .. import queue as q
+    body = body or {}
+    try:
+        return q.add(body.get("topic", ""), body.get("url", ""), body.get("note", ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/queue/{item_id}")
+def queue_remove(item_id: str):
+    from .. import queue as q
+    return {"ok": q.remove(item_id)}
+
+
+@app.post("/api/queue/{item_id}/promote")
+def queue_promote(item_id: str):
+    from .. import queue as q
+    return {"ok": q.promote(item_id)}
+
+
+# ---------------- autopilot ----------------
+@app.get("/api/autopilot")
+def autopilot_status():
+    from .. import autopilot
+    return autopilot.status()
+
+
+@app.post("/api/autopilot/run")
+def autopilot_run_now():
+    """Trigger one autopilot cycle immediately (ignores schedule) as a background job."""
+    job_id = next(_job_id_counter)
+    with _jobs_lock:
+        _jobs[job_id] = {"id": job_id, "status": "running", "log": "", "returncode": None}
+    threading.Thread(target=_run_job, args=(job_id, [], "pipeline.autopilot"), daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.post("/api/autopilot/config")
+def autopilot_config(body: dict = None):
+    """Persist autopilot enabled/time to controls.yaml (dashboard-writable)."""
+    body = body or {}
+    data = _load_controls()
+    ap = data.get("autopilot", {}) or {}
+    if "enabled" in body:
+        ap["enabled"] = bool(body["enabled"])
+    if body.get("time"):
+        ap["time"] = str(body["time"])
+    data["autopilot"] = ap
+    CONTROLS_PATH.write_text(CONTROLS_HEADER + yaml.safe_dump(data, sort_keys=False))
+    return {"ok": True, "autopilot": ap}
+
+
+def _scheduler_loop():
+    """Daily autopilot trigger: fire once when the clock hits the configured time."""
+    from .. import autopilot
+    fired_on = {"date": None}
+    while True:
+        try:
+            import datetime as _dt
+            today = str(_dt.date.today())
+            if autopilot.due_now() and fired_on["date"] != today:
+                fired_on["date"] = today
+                job_id = next(_job_id_counter)
+                with _jobs_lock:
+                    _jobs[job_id] = {"id": job_id, "status": "running", "log": "", "returncode": None}
+                threading.Thread(target=_run_job, args=(job_id, [], "pipeline.autopilot"), daemon=True).start()
+        except Exception:
+            pass
+        time.sleep(30)
+
+
+threading.Thread(target=_scheduler_loop, daemon=True).start()
+
+
 @app.post("/api/publish/{slug}")
 def publish_run(slug: str, body: dict = None):
     """Publish (or dry-run) a finished video. live=true only posts if creds + PUBLISH_LIVE."""

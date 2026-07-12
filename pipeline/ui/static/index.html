@@ -62,6 +62,33 @@
       </div>
     </section>
 
+    <section class="autopilot-section">
+      <div class="ap-grid">
+        <div class="ap-card">
+          <div class="ap-head">
+            <div><strong>Autopilot</strong> <span class="muted" id="ap-sub">hands-off daily factory</span></div>
+            <label class="switch"><input type="checkbox" id="ap-enabled"><span class="slider"></span></label>
+          </div>
+          <div class="ap-row">
+            <label class="field ap-time">
+              <span class="field-label">Daily run time</span>
+              <input type="time" id="ap-time" value="09:00">
+            </label>
+            <button class="btn" id="ap-run-now">Run once now</button>
+          </div>
+          <div class="ap-status muted" id="ap-status"></div>
+        </div>
+        <div class="ap-card">
+          <div class="ap-head"><div><strong>Content queue</strong> <span class="muted">topics autopilot works through (else it auto-scouts)</span></div></div>
+          <div class="ap-row">
+            <input type="text" id="queue-topic" placeholder="Add a topic to the queue…">
+            <button class="btn" id="queue-add">Add</button>
+          </div>
+          <div class="queue-list" id="queue-list"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="runs-section">
       <div class="section-head">
         <h2>Runs</h2>

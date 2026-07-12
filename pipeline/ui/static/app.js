@@ -487,9 +487,12 @@ function renderInsights(r) {
     `<li><span class="chip chip-warn">${escapeHtml(g.gate)} ×${g.count}</span> ${escapeHtml(g.fix || "")}</li>`).join("");
   const props = (r.proposals || []).map((p) => {
     const cc = p.confidence === "high" ? "chip-good" : p.confidence === "low" ? "chip-warn" : "";
+    const canApply = ["style_guide", "hook_formulas", "virality_rubric", "director_realism", "scouting"].includes(p.target);
+    const applyBtn = canApply
+      ? `<button class="btn-link" data-proposal="${encodeURIComponent(JSON.stringify(p))}" onclick="applyProposal(this)" title="append to config/learnings.md — steers the next run">apply →</button>` : "";
     return `<div class="proposal">
       <div class="proposal-head"><span class="chip">${escapeHtml(TARGET_LABEL[p.target] || p.target)}</span>
-        <span class="chip ${cc}">${escapeHtml(p.confidence || "")}</span></div>
+        <span class="chip ${cc}">${escapeHtml(p.confidence || "")}</span><span style="margin-left:auto">${applyBtn}</span></div>
       <div class="proposal-change">${escapeHtml(p.change || "")}</div>
       <div class="proposal-why muted">${escapeHtml(p.rationale || "")}</div></div>`;
   }).join("");
@@ -818,10 +821,78 @@ async function saveConfig() {
 }
 $("#config-save").addEventListener("click", saveConfig);
 
+// ---------- autopilot + queue ----------
+async function loadAutopilot() {
+  let s;
+  try { s = await (await fetch("/api/autopilot")).json(); } catch { return; }
+  $("#ap-enabled").checked = !!s.enabled;
+  if (s.time) $("#ap-time").value = s.time;
+  const last = s.last_run_date
+    ? `last run ${s.last_run_date} — ${s.last_ok ? "✓ " + (s.last_slug || "") : "✗ " + (s.last_error || "failed")}`
+    : "never run yet";
+  $("#ap-status").innerHTML = `${last}<br>next: <strong>${escapeHtml(s.next_queued || "auto-scout")}</strong> · ${s.queued_count || 0} queued`;
+}
+async function saveAutopilot() {
+  await fetch("/api/autopilot/config", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled: $("#ap-enabled").checked, time: $("#ap-time").value }) });
+  loadAutopilot();
+}
+async function runAutopilotNow() {
+  const btn = $("#ap-run-now"); btn.disabled = true; btn.textContent = "Starting…";
+  try {
+    const r = await (await fetch("/api/autopilot/run", { method: "POST" })).json();
+    if (r.job_id) watchJob(r.job_id);   // stream into the existing job log
+  } catch {}
+  setTimeout(() => { btn.disabled = false; btn.textContent = "Run once now"; loadRuns(); }, 1500);
+}
+async function loadQueue() {
+  let d;
+  try { d = await (await fetch("/api/queue")).json(); } catch { return; }
+  const list = $("#queue-list");
+  const items = d.items || [];
+  if (!items.length) { list.innerHTML = `<div class="muted queue-empty">Queue empty — autopilot will auto-scout.</div>`; return; }
+  list.innerHTML = items.map((i) => {
+    const done = i.status === "done";
+    return `<div class="queue-item ${done ? "queue-done" : ""}">
+      <span class="queue-status">${done ? "✓" : "•"}</span>
+      <span class="queue-topic" title="${escapeHtml(i.note || "")}">${escapeHtml(i.topic)}</span>
+      ${done ? "" : `<button class="btn-link" onclick="promoteQueue('${i.id}')">↑ next</button>`}
+      <button class="btn-link queue-x" onclick="removeQueue('${i.id}')">✕</button>
+    </div>`;
+  }).join("");
+}
+async function addQueue() {
+  const inp = $("#queue-topic"); const topic = inp.value.trim();
+  if (!topic) return;
+  await fetch("/api/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic }) });
+  inp.value = ""; loadQueue(); loadAutopilot();
+}
+async function promoteQueue(id) { await fetch(`/api/queue/${id}/promote`, { method: "POST" }); loadQueue(); loadAutopilot(); }
+async function removeQueue(id) { await fetch(`/api/queue/${id}`, { method: "DELETE" }); loadQueue(); loadAutopilot(); }
+
+async function applyProposal(btn) {
+  const p = JSON.parse(decodeURIComponent(btn.dataset.proposal));
+  btn.disabled = true; btn.textContent = "applying…";
+  try {
+    const r = await (await fetch("/api/analyst/apply", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proposal: p }) })).json();
+    btn.textContent = r.ok ? "applied ✓" : "failed";
+  } catch { btn.textContent = "failed"; }
+}
+
 // ---------- init ----------
 loadRuns();
 resumeAnyJob();
 loadIntegrations();
+loadAutopilot();
+loadQueue();
+{
+  $("#ap-enabled") && $("#ap-enabled").addEventListener("change", saveAutopilot);
+  $("#ap-time") && $("#ap-time").addEventListener("change", saveAutopilot);
+  $("#ap-run-now") && $("#ap-run-now").addEventListener("click", runAutopilotNow);
+  $("#queue-add") && $("#queue-add").addEventListener("click", addQueue);
+  $("#queue-topic") && $("#queue-topic").addEventListener("keydown", (e) => { if (e.key === "Enter") addQueue(); });
+}
 document.addEventListener("DOMContentLoaded", () => {
   const sg = $("#social-generate");
   if (sg) sg.addEventListener("click", generateSocial);

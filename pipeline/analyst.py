@@ -141,5 +141,44 @@ def latest() -> dict | None:
     return _read(ANALYST_DIR / "latest.json") or None
 
 
+_VALID_TARGETS = {"style_guide", "hook_formulas", "virality_rubric", "director_realism", "scouting"}
+_LEARNINGS = ROOT / "config" / "learnings.md"
+
+
+def apply_proposal(proposal: dict) -> dict:
+    """Guarded apply: append an approved proposal as a durable bullet under its target
+    section in config/learnings.md. The relevant station's prompt reads that section
+    (util.learnings), so the change takes effect on the next run — WITHOUT editing any
+    code. Reversible (just delete the line). Returns {ok, target, line}."""
+    target = (proposal.get("target") or "").strip()
+    change = (proposal.get("change") or "").strip()
+    if target not in _VALID_TARGETS:
+        return {"ok": False, "error": f"unknown target '{target}'"}
+    if not change:
+        return {"ok": False, "error": "empty change"}
+    conf = proposal.get("confidence", "")
+    why = (proposal.get("rationale") or "").strip()
+    line = f"- [{date.today()} · {conf}] {change}" + (f" (why: {why})" if why else "")
+
+    text = _LEARNINGS.read_text() if _LEARNINGS.exists() else \
+        "# Learnings — Analyst proposals you approved. Each bullet steers the matching\n" \
+        "# station's prompt (util.learnings). Delete a line to revert. Do not rename headers.\n"
+    header = f"## {target}"
+    if header in text:
+        # insert the bullet right after the section header
+        out, inserted = [], False
+        for ln in text.splitlines():
+            out.append(ln)
+            if not inserted and ln.strip() == header:
+                out.append(line)
+                inserted = True
+        text = "\n".join(out) + "\n"
+    else:
+        text = text.rstrip() + f"\n\n{header}\n{line}\n"
+    _LEARNINGS.parent.mkdir(parents=True, exist_ok=True)
+    _LEARNINGS.write_text(text)
+    return {"ok": True, "target": target, "line": line}
+
+
 if __name__ == "__main__":
     print(json.dumps(run(), indent=2)[:2500])

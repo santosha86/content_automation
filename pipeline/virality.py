@@ -11,7 +11,7 @@ expert rubric beats a model trained on nothing. Once the Publisher (Phase C) + a
 loop (Phase E) feed real view/retention numbers back, these weights get tuned to YOUR
 audience — that's the upgrade path.
 """
-from .util import llm_json, settings
+from .util import learnings_block, llm_json, settings
 
 # The levers, weighted by how much they move short-form AI-news performance. Weights sum
 # to 100. Saturation is a penalty applied on top (overdone topics get discounted).
@@ -48,6 +48,7 @@ def score(story: dict, station: str = "scout") -> dict:
     try:
         r = llm_json(
             f"""{_RUBRIC}
+{learnings_block("virality_rubric")}
 
 STORY
 title: {title}

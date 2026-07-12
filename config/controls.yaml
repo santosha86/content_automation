@@ -12,3 +12,6 @@ providers:
   reviewer: openrouter
   voice: elevenlabs
   broll: pexels
+autopilot:
+  enabled: false      # daily hands-off render; turn on from the dashboard when ready (it spends)
+  time: "09:00"

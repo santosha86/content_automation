@@ -40,6 +40,31 @@ def strategy_skill() -> str:
     return path.read_text() if path.exists() else ""
 
 
+LEARNINGS_FILE = ROOT / "config" / "learnings.md"
+
+
+def learnings(target: str) -> str:
+    """Return the applied-learning bullets for one station (section `## <target>` in
+    config/learnings.md), or "" if none. These are Analyst proposals the user approved —
+    injected into the relevant prompt so the system actually acts on what it learned."""
+    if not LEARNINGS_FILE.exists():
+        return ""
+    lines, grab, out = LEARNINGS_FILE.read_text().splitlines(), False, []
+    for ln in lines:
+        if ln.strip().startswith("## "):
+            grab = ln.strip()[3:].strip() == target
+            continue
+        if grab and ln.strip():
+            out.append(ln.rstrip())
+    return "\n".join(out).strip()
+
+
+def learnings_block(target: str, header: str = "APPLIED LEARNINGS (from performance analysis — follow these):") -> str:
+    """A ready-to-embed prompt block, or "" when there are no learnings for the target."""
+    body = learnings(target)
+    return f"\n{header}\n{body}\n" if body else ""
+
+
 def checkpoint_mode(name: str, default: str = "auto") -> str:
     """auto | manual for a pipeline checkpoint, read from controls.yaml."""
     return controls().get("checkpoints", {}).get(name, default)

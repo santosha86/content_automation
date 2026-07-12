@@ -395,3 +395,32 @@ button { font-family: inherit; }
 .proposal-head { display: flex; gap: 6px; margin-bottom: 5px; }
 .proposal-change { font-size: 13.5px; color: var(--text); line-height: 1.45; }
 .proposal-why { font-size: 12px; margin-top: 3px; line-height: 1.4; }
+
+/* ---------- autopilot + queue ---------- */
+.autopilot-section { margin-bottom: 22px; }
+.ap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .ap-grid { grid-template-columns: 1fr; } }
+.ap-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.ap-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.ap-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+.ap-row input[type="text"], .ap-row input[type="time"] { background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 8px 11px; font-size: 13.5px; }
+.ap-row input[type="text"] { flex: 1; }
+.ap-time { flex: 0 0 auto; }
+.ap-status { font-size: 12px; line-height: 1.6; }
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; flex: 0 0 auto; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; inset: 0; background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: 999px; cursor: pointer; transition: 0.2s; }
+.slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 2px; top: 2px;
+  background: var(--text-muted); border-radius: 50%; transition: 0.2s; }
+.switch input:checked + .slider { background: var(--accent-quiet); border-color: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
+.queue-list { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; max-height: 220px; overflow-y: auto; }
+.queue-empty { padding: 8px 0; }
+.queue-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; }
+.queue-status { color: var(--accent); }
+.queue-topic { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-done { opacity: 0.5; } .queue-done .queue-status { color: var(--good); }
+.queue-x { color: var(--text-muted); }

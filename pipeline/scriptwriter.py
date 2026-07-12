@@ -8,7 +8,7 @@ Director ever plans a single frame.
 """
 import json
 
-from .util import llm, llm_json, settings, strategy_skill, style_guide
+from .util import learnings_block, llm, llm_json, settings, strategy_skill, style_guide
 
 # The named checks the Critic must grade every draft on — lifted straight from the
 # retention structure + guardrails in the strategy skill.
@@ -44,6 +44,7 @@ CHOSEN HOOK (beat 1 narration must land this, spoken): "{hook['text']}"
 
 STYLE GUIDE:
 {style_guide()}
+{learnings_block("style_guide")}
 
 STRATEGY (retention structure + guardrails — obey exactly):
 {strategy_skill()}

@@ -20,3 +20,4 @@ assets/music/*
 *.wav
 *.aiff
 state/tts_cache/
+state/queue.json

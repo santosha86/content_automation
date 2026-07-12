@@ -19,7 +19,7 @@ import time
 import requests
 
 from . import scout
-from .util import llm_json, settings, strategy_skill
+from .util import learnings_block, llm_json, settings, strategy_skill
 
 TRENDING_URL = "https://github.com/trending?since=daily"
 TAVILY_URL = "https://api.tavily.com/search"
@@ -251,6 +251,7 @@ purely-technical story just because it's hot.
 Follow this house strategy exactly:
 
 {strategy_skill()}
+{learnings_block("scouting")}
 
 CANDIDATES ({len(candidates)}):
 {listing}

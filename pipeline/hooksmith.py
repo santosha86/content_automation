@@ -7,7 +7,7 @@ story's famous name when one genuinely applies, is 4-6 words, and declares a
 The `hook_pick` checkpoint (auto|manual) decides whether the agent's ranked
 variant_rank=1 is taken or the user chooses in the dashboard.
 """
-from .util import llm_json, strategy_skill
+from .util import learnings_block, llm_json, strategy_skill
 
 # Names line up with the storyboard schema's hook.type enum.
 _TYPES = ("kinetic_text", "visual_spectacle")
@@ -35,6 +35,7 @@ Follow this house strategy exactly — especially the hook formulas, the name-an
 rule, and the fabrication guardrail:
 
 {strategy_skill()}
+{learnings_block("hook_formulas")}
 
 Rules:
 - Exactly 3 variants, each a DIFFERENT formula (name+shock verb, stakes question,

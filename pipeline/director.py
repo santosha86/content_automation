@@ -11,7 +11,7 @@ import json
 
 import jsonschema
 
-from .util import ROOT, llm_json, settings, strategy_skill
+from .util import ROOT, learnings_block, llm_json, settings, strategy_skill
 
 SCHEMA_PATH = ROOT / "config" / "storyboard.schema.json"
 
@@ -78,6 +78,7 @@ BEATS (narration is fixed — plan a frame for each):
 
 STRATEGY (b-roll must show the subject, not the theme):
 {strategy_skill()}
+{learnings_block("director_realism")}
 
 Design ONE continuous visual concept (a single authored idea carrying the whole video,
 not a slideshow), and for EACH beat a visual + composition that serves it.
