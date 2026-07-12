@@ -19,6 +19,8 @@ from pathlib import Path
 
 import requests
 
+from . import util as _util  # noqa: F401 — importing util loads .env so FAL_KEY is present
+
 FAL_QUEUE = "https://queue.fal.run"
 # Configurable model slugs (verify/adjust at fal.ai/models). Kling standard is a good
 # quality/price balance; LTX is cheaper/faster.
