@@ -24,6 +24,51 @@ def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
 
 
+def _build_for_story(story: dict, log=print) -> dict:
+    """hook -> script -> validated storyboard for one story. Raises on a failure the
+    caller can recover from by trying the next candidate (e.g. a thin story the Director
+    can't turn into a schema-valid storyboard)."""
+    # 2. Hook Smith
+    log("[2/4] hook smith: 3 variants...")
+    hooks = hooksmith.make_hooks(story)
+    for h in hooks:
+        log(f"      #{h['variant_rank']} [{h['type']}] ({h['formula']}) \"{h['text']}\"")
+    hidx = checkpoints.resolve(
+        "hook_pick",
+        [{"label": h["text"], "detail": f"{h['formula']} — {h['rationale']}"} for h in hooks],
+        prompt="Which hook leads?", log=log,
+    )
+    hook = hooks[hidx]
+    log(f"      -> hook: \"{hook['text']}\"")
+
+    # 3. Writer + Critic
+    log("[3/4] writer+critic: drafting and grading beats...")
+    script = scriptwriter.write_and_critique(story, hook, log=log)
+    log(f"      -> {len(script['beats'])} beats, critic pass={script['passed']} "
+        f"(score {script['critique'].get('score')})")
+    sidx = checkpoints.resolve(
+        "script_approval",
+        [{"label": "Accept this script", "detail": f"{len(script['beats'])} beats, "
+          f"score {script['critique'].get('score')}"},
+         {"label": "Regenerate", "detail": "Run the writer+critic loop again"}],
+        prompt="Accept the script?", log=log,
+    )
+    if sidx == 1:
+        log("      regenerating script...")
+        script = scriptwriter.write_and_critique(story, hook, log=log)
+
+    # 4. Director — validated storyboard (raises if it never validates)
+    log("[4/4] director: building + validating storyboard...")
+    storyboard = director.build_storyboard(story, hook, script, log=log)
+    checkpoints.resolve(
+        "storyboard_approval",
+        [{"label": "Approve storyboard", "detail": storyboard["concept"].get("metaphor", "")},
+         {"label": "Approve (only option)", "detail": "Storyboard already schema-valid"}],
+        prompt="Approve the storyboard?", log=log,
+    )
+    return {"hooks": hooks, "hook": hook, "script": script, "storyboard": storyboard}
+
+
 def plan(topic: str = "", article_url: str = "", log=print) -> dict:
     checkpoints.clear()
 
@@ -57,48 +102,30 @@ def plan(topic: str = "", article_url: str = "", log=print) -> dict:
         [{"label": f"[{s['lane']}] {s['title']}", "detail": _story_detail(s)} for s in stories],
         prompt="Which story should we make?", log=log,
     )
-    story = stories[idx]
+    log(f"      -> story: {stories[idx]['title']}")
+
+    # Build the chosen story; if a thin/messy story can't be turned into a valid storyboard,
+    # fall back to the next-best candidate instead of crashing the run. Try up to 3.
+    order = [stories[idx]] + [s for i, s in enumerate(stories) if i != idx]
+    story, built, last_err = None, None, None
+    for attempt, cand in enumerate(order[:3], start=1):
+        if attempt > 1:
+            log(f"\n↻ that story couldn't be built into a valid video — falling back to "
+                f"next-best: {cand['title']}")
+        try:
+            built = _build_for_story(cand, log=log)
+            story = cand
+            break
+        except Exception as e:
+            last_err = e
+            log(f"      ✗ couldn't build this story ({str(e)[:140]})")
+            continue
+    if built is None:
+        raise RuntimeError(
+            f"None of the top candidates could be built into a valid storyboard "
+            f"(tried {min(3, len(order))}). Last error: {last_err}")
     strategist.mark_picked(story)
-    log(f"      -> story: {story['title']}")
-
-    # 2. Hook Smith — 3 variants, honoring hook_pick.
-    log("[2/4] hook smith: 3 variants...")
-    hooks = hooksmith.make_hooks(story)
-    for h in hooks:
-        log(f"      #{h['variant_rank']} [{h['type']}] ({h['formula']}) \"{h['text']}\"")
-    hidx = checkpoints.resolve(
-        "hook_pick",
-        [{"label": h["text"], "detail": f"{h['formula']} — {h['rationale']}"} for h in hooks],
-        prompt="Which hook leads?", log=log,
-    )
-    hook = hooks[hidx]
-    log(f"      -> hook: \"{hook['text']}\"")
-
-    # 3. Writer + Critic — beats graded against the retention structure.
-    log("[3/4] writer+critic: drafting and grading beats...")
-    script = scriptwriter.write_and_critique(story, hook, log=log)
-    log(f"      -> {len(script['beats'])} beats, critic pass={script['passed']} "
-        f"(score {script['critique'].get('score')})")
-    sidx = checkpoints.resolve(
-        "script_approval",
-        [{"label": "Accept this script", "detail": f"{len(script['beats'])} beats, "
-          f"score {script['critique'].get('score')}"},
-         {"label": "Regenerate", "detail": "Run the writer+critic loop again"}],
-        prompt="Accept the script?", log=log,
-    )
-    if sidx == 1:
-        log("      regenerating script...")
-        script = scriptwriter.write_and_critique(story, hook, log=log)
-
-    # 4. Director — validated storyboard, honoring storyboard_approval.
-    log("[4/4] director: building + validating storyboard...")
-    storyboard = director.build_storyboard(story, hook, script, log=log)
-    checkpoints.resolve(
-        "storyboard_approval",
-        [{"label": "Approve storyboard", "detail": storyboard["concept"].get("metaphor", "")},
-         {"label": "Approve (only option)", "detail": "Storyboard already schema-valid"}],
-        prompt="Approve the storyboard?", log=log,
-    )
+    hooks, hook, script, storyboard = built["hooks"], built["hook"], built["script"], built["storyboard"]
 
     # Persist the brain artifact + audit trail.
     slug = f"{datetime.date.today()}-{_slugify(story['title'])}"
