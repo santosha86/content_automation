@@ -22,25 +22,45 @@ import requests
 from . import util as _util  # noqa: F401 — importing util loads .env so FAL_KEY is present
 
 FAL_QUEUE = "https://queue.fal.run"
-# Configurable model slugs (verify/adjust at fal.ai/models). Kling standard is a good
-# quality/price balance; LTX is cheaper/faster.
-_IMG2VID = os.getenv("FAL_VIDEO_MODEL_I2V", "fal-ai/kling-video/v1.6/standard/image-to-video")
-_TXT2VID = os.getenv("FAL_VIDEO_MODEL_T2V", "fal-ai/kling-video/v1.6/standard/text-to-video")
+_DEFAULT_I2V = "fal-ai/kling-video/v1.6/standard/image-to-video"
+_DEFAULT_T2V = "fal-ai/kling-video/v1.6/standard/text-to-video"
+
+
+def _cfg() -> dict:
+    """The videogen block from config/settings.yaml — the toggle/models/cap live here so
+    everything is changeable in config, no code edits."""
+    from .util import settings
+    return settings().get("videogen", {}) or {}
+
+
+def _enabled() -> bool:
+    # Primary control is settings.yaml videogen.enabled. An env VIDEOGEN_ENABLED, IF set to
+    # anything non-empty, overrides it (handy for a one-off `VIDEOGEN_ENABLED=0 make video`).
+    env = os.getenv("VIDEOGEN_ENABLED", "")
+    if env != "":
+        return env.lower() in ("1", "true", "yes")
+    return bool(_cfg().get("enabled", False))
+
+
+def _model_i2v() -> str:
+    return os.getenv("FAL_VIDEO_MODEL_I2V") or _cfg().get("model_i2v", _DEFAULT_I2V)
+
+
+def _model_t2v() -> str:
+    return os.getenv("FAL_VIDEO_MODEL_T2V") or _cfg().get("model_t2v", _DEFAULT_T2V)
 
 
 def available() -> bool:
-    """On only when explicitly enabled AND a key exists — no accidental spend."""
-    if os.getenv("VIDEOGEN_ENABLED", "").lower() not in ("1", "true", "yes"):
-        return False
-    return bool(os.getenv("FAL_KEY"))
+    """On only when enabled (settings.yaml/env) AND a key exists — no accidental spend."""
+    return _enabled() and bool(os.getenv("FAL_KEY"))
 
 
 def status() -> str:
     if not os.getenv("FAL_KEY"):
         return "unavailable — no FAL_KEY (using realistic stills)"
-    if os.getenv("VIDEOGEN_ENABLED", "").lower() not in ("1", "true", "yes"):
-        return "key present but VIDEOGEN_ENABLED not set (using stills)"
-    return f"fal.ai ({_IMG2VID})"
+    if not _enabled():
+        return "key present but videogen.enabled is false in settings.yaml (using stills)"
+    return f"fal.ai ({_model_i2v()})"
 
 
 def _headers() -> dict:
@@ -122,14 +142,14 @@ def generate(shot: dict, still_png: Path | None, out_mp4: Path, seconds: float =
     prompt = (shot.get("prompt") or shot.get("must_show") or "").strip()
     dur = "10" if seconds > 6 else "5"  # Kling supports 5s or 10s
     if still_png and Path(still_png).exists():
-        model = _IMG2VID
+        model = _model_i2v()
         args = {"prompt": prompt or "subtle natural camera motion, realistic",
                 "image_url": _data_uri(Path(still_png)), "duration": dur}
     else:
-        model = _TXT2VID
+        model = _model_t2v()
         args = {"prompt": prompt, "duration": dur}
-    if not prompt and model == _TXT2VID:
-        return None
+        if not prompt:
+            return None
     submitted = _submit(model, args)
     if not submitted:
         return None

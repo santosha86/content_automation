@@ -39,10 +39,14 @@ music:
 virality:
   min_score: 55
 
-# Motion video-gen (fal.ai, opt-in paid tier). Only active when FAL_KEY is set AND
-# VIDEOGEN_ENABLED=1. max_shots caps paid clips per video (the Director flags which shots).
+# Motion video-gen (fal.ai, paid). Toggle everything here — no code changes. Still needs
+# FAL_KEY in .env (secret). Flip `enabled` false anytime to go back to free stills.
 videogen:
-  max_shots: 2
+  enabled: true      # master on/off (FAL_KEY must also be set in .env to actually run)
+  max_shots: 2       # hard cap on paid clips per video (Director flags which shots)
+  # Model slugs (verify at fal.ai/models). Kling = best look; swap to LTX for ~10x cheaper:
+  model_i2v: fal-ai/kling-video/v1.6/standard/image-to-video
+  model_t2v: fal-ai/kling-video/v1.6/standard/text-to-video
 
 # Branded end-card (reference rule: one reusable end-card, identical every video, last ~2s)
 branding:
