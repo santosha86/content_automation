@@ -11,6 +11,7 @@ import json
 
 import jsonschema
 
+from . import entities
 from .util import ROOT, learnings_block, llm_json, settings, strategy_skill
 
 SCHEMA_PATH = ROOT / "config" / "storyboard.schema.json"
@@ -65,6 +66,12 @@ def _visual_layer(scaffold: dict, fix_note: str = "") -> dict:
         f'  beat {b["id"]} [{b["emotion"]}]: "{b["narration"]}" (overlay: {b["overlay"] or "-"})'
         for b in scaffold["beats"]
     )
+    # Entity anchoring: the brands this story is actually about, each with a page they OWN.
+    names = entities.detect(
+        scaffold["topic"]["title"], scaffold["topic"]["framing_notes"],
+        scaffold["hook"]["text"], *[b["narration"] for b in scaffold["beats"]],
+    )
+    entity_names = ", ".join(names) if names else "(none)"
     return llm_json(
         f"""You are the Director. The story, hook, and narration are LOCKED. Author only
 the VISUAL through-line for this vertical AI-news Short.
@@ -75,6 +82,24 @@ FRAMING: {scaffold['topic']['framing_notes']}
 HOOK ({scaffold['hook']['type']}): "{scaffold['hook']['text']}"
 BEATS (narration is fixed — plan a frame for each):
 {beat_lines}
+
+ENTITIES IN THIS STORY (the protagonist is first):
+{entities.brief(names)}
+
+ENTITY ANCHORING — THE RULE THAT MATTERS MOST:
+When a beat NAMES a company, the frame MUST SHOW THAT COMPANY. Not the theme it belongs to.
+"Meta built its own chip" => show Meta (its page, its product, its logo) — NOT a generic
+data-center hallway. A themed stock shot while the voice says a brand name is the single
+biggest quality failure in this format: it reads as filler and the viewer scrolls.
+  - Set each shot's `entity` to the company that shot must show, EXACTLY as spelled in the
+    ENTITIES list above ({entity_names}). Leave it "" only for shots that genuinely show no
+    company (a person's hands, a chart, an abstract consequence).
+  - Every shot whose `phrase` mentions a company MUST carry that company's `entity`.
+  - The strongest anchor is a screen_capture of the company's OWN page (URLs listed above —
+    they are screenshot-safe). Use it for at least one shot of the protagonist.
+  - A shot carrying an `entity` gets that brand's REAL logo composited on the frame
+    automatically — so you do NOT need to describe a logo in the image prompt (generated
+    logos come out as garbled fakes). Describe the SCENE; the real mark is added for you.
 
 STRATEGY (b-roll must show the subject, not the theme):
 {strategy_skill()}
@@ -148,6 +173,9 @@ Reply with JSON only:
             "query": "<stock query for this phrase's concrete subject>",
             "prompt": "<image-gen prompt if source=generated_image, else empty>",
             "must_show": "<the one thing this shot must show>",
+            "entity": "<the company this shot must show, spelled exactly as in the ENTITIES
+              list; "" only if the shot genuinely shows no company. Its real logo is
+              composited onto the frame for you — never describe a logo in the prompt.>",
             "camera": "none|zoom_in|zoom_out|punch_in",
             "motion": <true ONLY for a source=generated_image shot that genuinely needs REAL
               movement — an action happening, a process, motion the eye expects. NEVER set
@@ -207,6 +235,14 @@ def build_storyboard(story: dict, hook: dict, script: dict, max_retries: int = 3
         errors = validate(storyboard)
         if not errors:
             log(f"      storyboard valid on attempt {attempt}")
+            # Entity anchoring is an invariant, not a suggestion — the model proposes the
+            # anchors, this corrects them (see entities.normalize).
+            fixed = entities.normalize(storyboard)
+            anchored = sum(1 for b in storyboard["beats"]
+                           for s in b["visual"].get("shots", []) if s.get("entity"))
+            total = sum(len(b["visual"].get("shots", [])) for b in storyboard["beats"])
+            log(f"      entity anchoring: {anchored}/{total} shots"
+                + (f" ({fixed} corrected)" if fixed else ""))
             return storyboard
         log(f"      storyboard invalid (attempt {attempt}): {len(errors)} error(s)")
         fix_note = "The previous attempt failed schema validation. Fix exactly these and " \

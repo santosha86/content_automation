@@ -239,6 +239,10 @@
                     "motion": {
                       "type": "boolean",
                       "description": "Optional. Set true for the 1-2 shots per video that genuinely need REAL movement (an action happening, a process, motion the eye expects). When video-gen is enabled, these get an animated clip; otherwise they stay a still with Ken-Burns. Use sparingly."
+                    },
+                    "entity": {
+                      "type": "string",
+                      "description": "Entity anchoring. The company this shot must SHOW, spelled as in pipeline/entities.py BRANDS (e.g. 'Meta', 'NVIDIA'). Any shot whose phrase names a company must carry it. Visuals composites that brand's REAL logo onto the frame, so the prompt never describes a logo (generated logos come out garbled). Empty when the shot genuinely shows no company."
                     }
                   }
                 }
