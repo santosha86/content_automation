@@ -149,9 +149,11 @@ Reply with JSON only:
             "prompt": "<image-gen prompt if source=generated_image, else empty>",
             "must_show": "<the one thing this shot must show>",
             "camera": "none|zoom_in|zoom_out|punch_in",
-            "motion": <true ONLY for a shot that genuinely needs REAL movement — an action
-              happening, a process, motion the eye expects; else omit or false. Mark AT MOST
-              2 shots in the WHOLE video as motion:true — these are the ones worth animating.>"
+            "motion": <true ONLY for a source=generated_image shot that genuinely needs REAL
+              movement — an action happening, a process, motion the eye expects. NEVER set
+              motion:true on a screen_capture or broll_video shot (they can't be animated — it
+              wastes the flag). Else omit or false. Mark AT MOST 2 shots in the WHOLE video as
+              motion:true — these are the ones worth animating.>"
           }}
         ]
       }},

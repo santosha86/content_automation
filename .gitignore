@@ -21,3 +21,6 @@ assets/music/*
 *.aiff
 state/tts_cache/
 state/queue.json
+
+# macOS
+.DS_Store

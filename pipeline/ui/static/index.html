@@ -4,19 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Signal — Content Dashboard</title>
+<link rel="stylesheet" href="/static/fonts.css">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">●</span>
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
       <div>
         <div class="brand-name">SIGNAL</div>
-        <div class="brand-sub">Content factory control panel</div>
+        <div class="brand-sub">Content factory control room</div>
       </div>
     </div>
     <div class="topbar-right">
-      <nav class="tabs" role="tablist">
+      <nav class="tabs" role="tablist" aria-label="Sections">
         <button class="tab active" data-view="studio" role="tab" aria-selected="true">Studio</button>
         <button class="tab" data-view="usage" role="tab" aria-selected="false">Usage</button>
         <button class="tab" data-view="social" role="tab" aria-selected="false">Social</button>
@@ -24,19 +25,26 @@
         <button class="tab" data-view="evals" role="tab" aria-selected="false">Evals</button>
         <button class="tab" data-view="config" role="tab" aria-selected="false">Config</button>
       </nav>
-      <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+      <button id="theme-toggle" class="icon-btn" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
     </div>
   </header>
 
   <main class="page" id="view-studio">
 
+    <div class="view-intro">
+      <div class="eyebrow">Studio</div>
+      <h1 class="view-title">Turn today's AI news into a short.</h1>
+      <p class="view-lede">Give Scout a topic — or leave it blank and it picks the day's strongest story — then Plan a storyboard or Generate the finished video end-to-end.</p>
+    </div>
+
     <div class="integration-strip" id="integration-strip"></div>
 
     <section class="generate-panel" id="generate-panel">
+      <div class="panel-eyebrow">Create</div>
       <div class="generate-row">
         <div class="generate-fields">
           <label class="field">
-            <span class="field-label">Topic <span class="optional">(optional — leave blank and Scout picks today's best story)</span></span>
+            <span class="field-label">Topic <span class="optional">— leave blank and Scout picks today's best story</span></span>
             <input type="text" id="topic-input" placeholder="e.g. Apple sues OpenAI over trade secret theft">
           </label>
           <label class="field" id="url-field" hidden>
@@ -96,18 +104,21 @@
       </div>
       <div class="runs-grid" id="runs-grid"></div>
       <div class="empty-state" id="empty-state" hidden>
-        <p>No videos yet. Generate your first one above.</p>
+        <div class="empty-icon" aria-hidden="true">✦</div>
+        <p class="empty-title">No videos yet</p>
+        <p>Generate your first one above — it lands here with its QA report and a one-click publish.</p>
       </div>
     </section>
 
   </main>
 
   <main class="page" id="view-usage" hidden>
+    <div class="view-intro">
+      <div class="eyebrow">Usage &amp; spend</div>
+      <h1 class="view-title">Every token, every cent — per video.</h1>
+      <p class="view-lede">Consumption is captured automatically as each station runs. Prices come from <code>config/pricing.yaml</code> and are applied at read time, so you can retro-correct rates any time.</p>
+    </div>
     <section class="config-panel">
-      <div class="section-head">
-        <h2>Usage &amp; spend</h2>
-        <span class="muted">per-video token consumption + cost · prices from config/pricing.yaml (edited retroactively)</span>
-      </div>
       <div class="usage-tiles" id="usage-tiles"></div>
       <div class="usage-table-wrap">
         <table class="usage-table" id="usage-table">
@@ -119,23 +130,26 @@
         </table>
       </div>
       <div class="empty-state" id="usage-empty" hidden>
-        <p>No usage tracked yet. Run <code>make plan</code> or generate a video — spend is captured automatically.</p>
+        <div class="empty-icon" aria-hidden="true">✦</div>
+        <p class="empty-title">No usage tracked yet</p>
+        <p>Run <code>make plan</code> or generate a video — spend is captured automatically.</p>
       </div>
     </section>
   </main>
 
   <main class="page" id="view-social" hidden>
+    <div class="view-intro">
+      <div class="eyebrow">Social</div>
+      <h1 class="view-title">One story, every channel.</h1>
+      <p class="view-lede">Spin an on-brand LinkedIn post and an X thread from a rendered video or a fresh topic — then copy or schedule straight to Typefully.</p>
+    </div>
     <section class="config-panel">
-      <div class="section-head">
-        <h2>Social posts</h2>
-        <span class="muted">on-brand LinkedIn + X drafts from a video or a fresh topic</span>
-      </div>
       <div class="social-input">
         <label class="field">
           <span class="field-label">From a video <span class="optional">(optional)</span></span>
           <select id="social-run-select"><option value="">— pick a rendered video —</option></select>
         </label>
-        <div class="social-or">or</div>
+        <div class="social-or"><span>or</span></div>
         <label class="field">
           <span class="field-label">Type a topic</span>
           <input type="text" id="social-topic" placeholder="e.g. OpenAI's new coding agent runs your CI">
@@ -151,11 +165,12 @@
   </main>
 
   <main class="page" id="view-analytics" hidden>
+    <div class="view-intro">
+      <div class="eyebrow">Analytics</div>
+      <h1 class="view-title">Did the prediction hold up?</h1>
+      <p class="view-lede">Predicted virality against real performance, with an analyst that reads the gap and proposes edits to the pipeline's brain.</p>
+    </div>
     <section class="config-panel">
-      <div class="section-head">
-        <h2>Analytics</h2>
-        <span class="muted" id="analytics-source">performance per published video</span>
-      </div>
       <div class="analytics-banner" id="analytics-banner" hidden>
         Showing <strong>sample data</strong>. Set <code>ANALYTICS_LIVE=1</code> + platform tokens and fill
         <code>analytics._fetch_live()</code> to bridge real YouTube/Instagram numbers — the table stays identical.
@@ -179,26 +194,37 @@
         </table>
       </div>
       <div class="empty-state" id="analytics-empty" hidden>
-        <p>No published videos yet. Metrics appear here once videos exist (sample data for now).</p>
+        <div class="empty-icon" aria-hidden="true">✦</div>
+        <p class="empty-title">No published videos yet</p>
+        <p>Metrics appear here once videos exist (sample data for now).</p>
       </div>
     </section>
   </main>
 
   <main class="page" id="view-evals" hidden>
+    <div class="view-intro">
+      <div class="eyebrow">Model evals</div>
+      <h1 class="view-title">Blind-taste your models.</h1>
+      <p class="view-lede">Local (ollama) vs paid (anthropic), side by side. Pick the better output without knowing which is which — the winner feeds the local-first cost policy.</p>
+    </div>
     <section class="config-panel">
-      <div class="section-head">
-        <h2>Model evals</h2>
-        <span class="muted">blind A/B: local (ollama) vs paid (anthropic) — pick the better output, provider is revealed after</span>
-      </div>
-      <p class="config-note">Run <code>make eval</code> (or the CLI) to add a benchmark. Pick without knowing which side is which — the winner feeds the local-first cost policy.</p>
+      <p class="config-note">Run <code>make eval</code> (or the CLI) to add a benchmark. Pick without knowing which side is which — the provider is revealed only after you choose.</p>
       <div id="evals-list"></div>
       <div class="empty-state" id="evals-empty" hidden>
-        <p>No evals yet. Run <code>make eval</code> to benchmark a story across providers.</p>
+        <div class="empty-icon" aria-hidden="true">✦</div>
+        <p class="empty-title">No evals yet</p>
+        <p>Run <code>make eval</code> to benchmark a story across providers.</p>
       </div>
     </section>
   </main>
 
   <main class="page" id="view-config" hidden>
+
+    <div class="view-intro">
+      <div class="eyebrow">Configuration</div>
+      <h1 class="view-title">Who decides, and on which rung.</h1>
+      <p class="view-lede">Hand each choice-point to the agent or keep it for yourself, and set the provider ladder every station climbs — local-free first, paid only as an upgrade.</p>
+    </div>
 
     <section class="config-panel">
       <div class="section-head">
@@ -228,6 +254,8 @@
   <div class="overlay" id="detail-overlay" hidden>
     <div class="detail-panel" id="detail-panel"></div>
   </div>
+
+  <div class="toast-wrap" id="toast-wrap" aria-live="polite" aria-atomic="true"></div>
 
   <script src="/static/app.js"></script>
 </body>

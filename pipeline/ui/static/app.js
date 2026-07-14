@@ -1,5 +1,20 @@
 const $ = (sel) => document.querySelector(sel);
 
+// ---------- toast ----------
+function toast(msg, kind = "") {
+  const wrap = $("#toast-wrap");
+  if (!wrap) return;
+  const ico = kind === "good" ? "✓" : kind === "bad" ? "✕" : "◆";
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.innerHTML = `<span class="toast-ico">${ico}</span><span>${msg}</span>`;
+  wrap.appendChild(el);
+  setTimeout(() => {
+    el.classList.add("leaving");
+    setTimeout(() => el.remove(), 260);
+  }, 3200);
+}
+
 // ---------- theme ----------
 const themeToggle = $("#theme-toggle");
 function applyTheme(t) {
@@ -338,6 +353,7 @@ async function copyText(text, btn) {
     await navigator.clipboard.writeText(text || "");
     const old = btn.textContent; btn.textContent = "copied ✓";
     setTimeout(() => (btn.textContent = old), 1400);
+    toast("Copied to clipboard", "good");
   } catch { /* clipboard blocked */ }
 }
 
@@ -469,6 +485,8 @@ async function scheduleSocial(btn) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, publish_at: "next-free-slot" }) })).json();
   btn.textContent = r.status === "scheduled" ? "scheduled ✓" : (r.status === "not_configured" ? "add TYPEFULLY_API_KEY" : "failed");
+  toast(r.status === "scheduled" ? "Scheduled to Typefully" : (r.status === "not_configured" ? "Add TYPEFULLY_API_KEY to .env" : "Schedule failed"),
+    r.status === "scheduled" ? "good" : "bad");
   setTimeout(() => (btn.textContent = "schedule"), 2500);
 }
 
@@ -818,6 +836,7 @@ async function saveConfig() {
   note.textContent = res.ok ? "Saved ✓" : "Save failed";
   note.hidden = false;
   setTimeout(() => { note.hidden = true; }, 2500);
+  toast(res.ok ? "Configuration saved" : "Save failed", res.ok ? "good" : "bad");
 }
 $("#config-save").addEventListener("click", saveConfig);
 
@@ -836,6 +855,7 @@ async function saveAutopilot() {
   await fetch("/api/autopilot/config", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled: $("#ap-enabled").checked, time: $("#ap-time").value }) });
   loadAutopilot();
+  toast($("#ap-enabled").checked ? `Autopilot on — daily at ${$("#ap-time").value}` : "Autopilot off", "good");
 }
 async function runAutopilotNow() {
   const btn = $("#ap-run-now"); btn.disabled = true; btn.textContent = "Starting…";
@@ -866,6 +886,7 @@ async function addQueue() {
   if (!topic) return;
   await fetch("/api/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic }) });
   inp.value = ""; loadQueue(); loadAutopilot();
+  toast("Added to queue", "good");
 }
 async function promoteQueue(id) { await fetch(`/api/queue/${id}/promote`, { method: "POST" }); loadQueue(); loadAutopilot(); }
 async function removeQueue(id) { await fetch(`/api/queue/${id}`, { method: "DELETE" }); loadQueue(); loadAutopilot(); }
@@ -877,7 +898,8 @@ async function applyProposal(btn) {
     const r = await (await fetch("/api/analyst/apply", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ proposal: p }) })).json();
     btn.textContent = r.ok ? "applied ✓" : "failed";
-  } catch { btn.textContent = "failed"; }
+    toast(r.ok ? "Proposal applied to the pipeline brain" : "Apply failed", r.ok ? "good" : "bad");
+  } catch { btn.textContent = "failed"; toast("Apply failed", "bad"); }
 }
 
 // ---------- init ----------
